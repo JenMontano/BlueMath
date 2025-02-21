@@ -1,0 +1,11 @@
+{
+    "name": "Bluemath Notebooks",
+    "image": "tausiaj/rocky8",
+    "settings": {
+        "terminal.integrated.shell.linux": "/bin/bash"
+    },
+    "extensions": [
+        "ms-python.python",
+        "ms-toolsai.jupyter"
+    ]
+}
