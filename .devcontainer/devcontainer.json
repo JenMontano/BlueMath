@@ -1,6 +1,6 @@
 {
     "name": "Bluemath Notebooks",
-    "image": "geoocean/rocky8:1.0",
+    "image": "geoocean/rocky8",
     "settings": {
         "terminal.integrated.shell.linux": "/bin/bash"
     },
