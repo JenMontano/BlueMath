@@ -177,3 +177,7 @@ cython_debug/
 *.mat
 *.tab
 *.dat
+
+# Cases directories
+*CAN_cases/
+*Veggy_cases/
