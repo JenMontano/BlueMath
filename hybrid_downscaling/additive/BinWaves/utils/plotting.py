@@ -27,24 +27,98 @@ def plot_bathymetry(data: xr.DataArray, **kwargs):
     p.axes.gridlines(draw_labels=True)
 
 
-def plot_cases_grid(data: xr.DataArray, **kwargs):
-    p = data.plot(
-        col="case_num",
-        col_wrap=25,
-        **kwargs,
-    )
-    for ax in p.axes.flat:
+def plot_cases_grid(
+    data: xr.DataArray,
+    cases_to_plot: list = [0, 320, 615],
+    colors_to_plot: list = ["green", "orange", "purple"],
+):
+    # Plot all cases in a grid
+    fig, axes = plt.subplots(ncols=29, nrows=24, figsize=(29, 15))
+    for i, ax in enumerate(axes.flat):
+        try:
+            ax.pcolor(
+                (
+                    data.sel(case_num=i)
+                    .isel(Xp=slice(None, None, 15), Yp=slice(None, None, 15))
+                    .values
+                ),
+                cmap="RdBu_r",
+                vmin=0,
+                vmax=2,
+            )
+        except Exception as e:
+            print(e)
+    for i, ax in enumerate(axes.flat):
         ax.set_aspect("equal")
         ax.set_title("")
         ax.axis("off")
+    fig.tight_layout()
+    # Set texts in left part of grid and top part
+    fig.text(
+        0, 0.5, "Directions", ha="center", va="center", rotation="vertical", fontsize=20
+    )
+    fig.text(0.5, 1, "Frequencies", ha="center", va="center", fontsize=20)
+    # Plot selected cases in a grid
+    fig_sel, axes_sel = plt.subplots(
+        ncols=len(cases_to_plot), nrows=1, figsize=(5 * len(cases_to_plot), 4)
+    )
+    for ax, ax_sel, case_to_plot, color_to_plot in zip(
+        axes.flat[cases_to_plot], axes_sel.flat, cases_to_plot, colors_to_plot
+    ):
+        try:
+            data.sel(case_num=case_to_plot).plot(
+                ax=ax_sel,
+                cmap="RdBu_r",
+                vmin=0,
+                vmax=2,
+                add_colorbar=True,
+                cbar_kwargs={"orientation": "horizontal", "shrink": 0.8},
+            )
+            ax_sel.set_aspect("equal")
+            ax_sel.set_title("")
+            # Remove ticks and labels
+            ax_sel.set_xticks([])
+            ax_sel.set_yticks([])
+            ax_sel.set_xticklabels([])
+            ax_sel.set_yticklabels([])
+            ax_sel.set_xlabel("")
+            ax_sel.set_ylabel("")
+            # Set axis of color to indicate it is plotted
+            ax_sel.spines["top"].set_color(color_to_plot)
+            ax_sel.spines["top"].set_linewidth(2)
+            ax_sel.spines["right"].set_color(color_to_plot)
+            ax_sel.spines["right"].set_linewidth(2)
+            ax_sel.spines["bottom"].set_color(color_to_plot)
+            ax_sel.spines["bottom"].set_linewidth(2)
+            ax_sel.spines["left"].set_color(color_to_plot)
+            ax_sel.spines["left"].set_linewidth(2)
+            # Set axis of color to indicate it is plotted
+            ax.axis("on")
+            # Remove ticks and labels
+            ax.set_xticks([])
+            ax.set_yticks([])
+            ax.set_xticklabels([])
+            ax.set_yticklabels([])
+            # Set axis of color to indicate it is plotted
+            ax.spines["top"].set_color(color_to_plot)
+            ax.spines["top"].set_linewidth(2)
+            ax.spines["right"].set_color(color_to_plot)
+            ax.spines["right"].set_linewidth(2)
+            ax.spines["bottom"].set_color(color_to_plot)
+            ax.spines["bottom"].set_linewidth(2)
+            ax.spines["left"].set_color(color_to_plot)
+            ax.spines["left"].set_linewidth(2)
+        except Exception as e:
+            print(e)
+    fig_sel.tight_layout()
 
 
 def plot_case_variables(data: xr.Dataset):
-    fig, axes = plt.subplots(1, 3, figsize=(15, 5))
+    fig, axes = plt.subplots(1, 3, figsize=(15, 4))
     data["Hsig"].plot(
         ax=axes[0],
         cbar_kwargs={"label": "Hsig [m]", "orientation": "horizontal", "shrink": 0.7},
-        cmap="bwr",
+        cmap="RdBu_r",
         vmin=0,
         vmax=2,
     )
@@ -76,6 +150,23 @@ def plot_case_variables(data: xr.Dataset):
             color="grey",
             scale=25,
         )
+    fig.tight_layout()
+
+
+def create_text_with_metrics(array1: np.ndarray, array2: np.ndarray):
+    """
+    Create a text with metrics comparing two arrays.
+    """
+
+    # Calculate metrics
+    mae = np.mean(np.abs(array1 - array2))
+    rmse = np.sqrt(np.mean((array1 - array2) ** 2))
+    r2 = np.corrcoef(array1, array2)[0, 1] ** 2
+
+    # Create text
+    text = f"MAE: {mae:.2f}\nRMSE: {rmse:.2f}\nR²: {r2:.2f}"
+
+    return text
 
 
 def plot_wave_series(
@@ -84,37 +175,45 @@ def plot_wave_series(
     offshore_data: wavespectra.SpecArray,
     times: np.ndarray,
 ):
-    fig, axes = plt.subplots(3, 1, figsize=(10, 10))
-    buoy_data.hs().plot(ax=axes[0], label="Buoy", c="darkred", alpha=0.8, lw=1)
-    buoy_data.tp().plot(ax=axes[1], label="Buoy", c="darkred", alpha=0.8, lw=1)
+    buoy_color = "lightcoral"
+    binwaves_color = "royalblue"
+    offshore_color = "gold"
+
+    fig, axes = plt.subplots(3, 1, figsize=(20, 10))
+    buoy_data.hs().plot(ax=axes[0], label="Buoy", c=buoy_color, alpha=0.8, lw=1)
+    buoy_data.tp().plot(ax=axes[1], label="Buoy", c=buoy_color, alpha=0.8, lw=1)
     axes[2].scatter(
         times,
         buoy_data.dpm().values,
-        c="darkred",
+        c=buoy_color,
         label="Buoy",
         alpha=0.8,
         s=1,
     )
     binwaves_data.hs().plot(
-        ax=axes[0], label="BinWaves", c="dodgerblue", alpha=0.8, lw=1
+        ax=axes[0], label="BinWaves", c=binwaves_color, alpha=0.8, lw=1
     )
     binwaves_data.tp().plot(
-        ax=axes[1], label="BinWaves", c="dodgerblue", alpha=0.8, lw=1
+        ax=axes[1], label="BinWaves", c=binwaves_color, alpha=0.8, lw=1
     )
     axes[2].scatter(
         times,
         binwaves_data.dpm().values,
-        c="dodgerblue",
+        c=binwaves_color,
         label="BinWaves",
         alpha=0.8,
         s=1,
     )
-    offshore_data.hs().plot(ax=axes[0], label="Offshore", c="orange", alpha=0.5, lw=1)
-    offshore_data.tp().plot(ax=axes[1], label="Offshore", c="orange", alpha=0.5, lw=1)
+    offshore_data.hs().plot(
+        ax=axes[0], label="Offshore", c=offshore_color, alpha=0.5, lw=1
+    )
+    offshore_data.tp().plot(
+        ax=axes[1], label="Offshore", c=offshore_color, alpha=0.5, lw=1
+    )
     axes[2].scatter(
         times,
         offshore_data.dpm().values,
-        c="orange",
+        c=offshore_color,
         label="Offshore",
         alpha=0.8,
         s=1,
@@ -138,6 +237,12 @@ def plot_wave_series(
         c=hs,
         cmap="turbo",
     )
+    axes[0].text(
+        5,
+        0.5,
+        create_text_with_metrics(buoy_data.hs().values, binwaves_data.hs().values),
+        color="darkred",
+    )
     axes[0].plot([0, 7], [0, 7], c="darkred", linestyle="--")
     axes[0].set_xlabel("Hs - Buoy [m]")
     axes[0].set_ylabel("Hs - BinWaves [m]")
@@ -153,6 +258,12 @@ def plot_wave_series(
         cmap="turbo",
         label="Tp",
     )
+    axes[1].text(
+        15,
+        1.25,
+        create_text_with_metrics(buoy_data.tp().values, binwaves_data.tp().values),
+        color="darkred",
+    )
     axes[1].plot([0, 20], [0, 20], c="darkred", linestyle="--")
     axes[1].set_xlabel("Tp - Buoy [s]")
     axes[1].set_ylabel("Tp - BinWaves [s]")
@@ -167,6 +278,12 @@ def plot_wave_series(
         c=dpm,
         cmap="turbo",
         label="Dpm",
+    )
+    axes[2].text(
+        250,
+        25,
+        create_text_with_metrics(buoy_data.dpm().values, binwaves_data.dpm().values),
+        color="darkred",
     )
     axes[2].plot([0, 360], [0, 360], c="darkred", linestyle="--")
     axes[2].set_xlabel("Dir - Buoy [°]")
