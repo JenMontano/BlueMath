@@ -2,18 +2,18 @@ import numpy as np
 import xarray as xr
 
 
-def transform_CAWCR_WS(
-    cawcr_dataset: xr.Dataset,
+def transform_ERA5_spectrum(
+    era5_spectrum: xr.Dataset,
     subset_parameters: dict,
     available_case_num: np.ndarray,
 ) -> xr.Dataset:
     """
-    Transform the wave spectra from CAWCR format to binwaves format.
+    Transform the wave spectra from ERA5 format to binwaves format.
 
     Parameters
     ----------
-    cawcr_dataset : xr.Dataset
-        The wave spectra dataset in CAWCR format.
+    era5_spectrum : xr.Dataset
+        The wave spectra dataset in ERA5 format.
     subset_parameters : dict
         A dictionary containing parameters for the subset processing.
     available_case_num : np.ndarray
@@ -26,7 +26,7 @@ def transform_CAWCR_WS(
     """
 
     # First, reproject the wave spectra to the binwaves format
-    ds = cawcr_dataset.rename({"frequency": "freq", "direction": "dir"})
+    ds = era5_spectrum.rename({"frequency": "freq", "direction": "dir"})
     ds["efth"] = ds["efth"] * np.pi / 180.0
     ds["dir"] = ds["dir"] - 180.0
     ds["dir"] = np.where(ds["dir"] < 0, ds["dir"] + 360, ds["dir"])

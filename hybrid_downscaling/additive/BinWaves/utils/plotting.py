@@ -11,7 +11,7 @@ from scipy.stats import gaussian_kde
 my_feature = cfeature.NaturalEarthFeature(
     "physical",
     "coastline",
-    "50m",
+    "10m",
     edgecolor="black",
 )
 
@@ -180,11 +180,11 @@ def plot_wave_series(
     offshore_color = "gold"
 
     fig, axes = plt.subplots(3, 1, figsize=(20, 10))
-    buoy_data.hs().plot(ax=axes[0], label="Buoy", c=buoy_color, alpha=0.8, lw=1)
-    buoy_data.tp().plot(ax=axes[1], label="Buoy", c=buoy_color, alpha=0.8, lw=1)
+    buoy_data["Hs_Buoy"].plot(ax=axes[0], label="Buoy", c=buoy_color, alpha=0.8, lw=1)
+    buoy_data["Tp_Buoy"].plot(ax=axes[1], label="Buoy", c=buoy_color, alpha=0.8, lw=1)
     axes[2].scatter(
         times,
-        buoy_data.dpm().values,
+        buoy_data["Dir_Buoy"].values,
         c=buoy_color,
         label="Buoy",
         alpha=0.8,
@@ -228,10 +228,10 @@ def plot_wave_series(
         ax.set_title("")
 
     fig, axes = plt.subplots(1, 3, figsize=(15, 5))
-    hs = np.vstack([buoy_data.hs().values, binwaves_data.hs().values])
+    hs = np.vstack([buoy_data["Hs_Buoy"].values, binwaves_data.hs().values])
     hs = gaussian_kde(hs)(hs)
     axes[0].scatter(
-        buoy_data.hs().values,
+        buoy_data["Hs_Buoy"].values,
         binwaves_data.hs().values,
         s=1,
         c=hs,
@@ -240,7 +240,9 @@ def plot_wave_series(
     axes[0].text(
         5,
         0.5,
-        create_text_with_metrics(buoy_data.hs().values, binwaves_data.hs().values),
+        create_text_with_metrics(
+            buoy_data["Hs_Buoy"].values, binwaves_data.hs().values
+        ),
         color="darkred",
     )
     axes[0].plot([0, 7], [0, 7], c="darkred", linestyle="--")
@@ -248,10 +250,10 @@ def plot_wave_series(
     axes[0].set_ylabel("Hs - BinWaves [m]")
     axes[0].set_xlim([0, 7])
     axes[0].set_ylim([0, 7])
-    tp = np.vstack([buoy_data.tp().values, binwaves_data.tp().values])
+    tp = np.vstack([buoy_data["Tp_Buoy"].values, binwaves_data.tp().values])
     tp = gaussian_kde(tp)(tp)
     axes[1].scatter(
-        buoy_data.tp().values,
+        buoy_data["Tp_Buoy"].values,
         binwaves_data.tp().values,
         s=1,
         c=tp,
@@ -261,7 +263,9 @@ def plot_wave_series(
     axes[1].text(
         15,
         1.25,
-        create_text_with_metrics(buoy_data.tp().values, binwaves_data.tp().values),
+        create_text_with_metrics(
+            buoy_data["Tp_Buoy"].values, binwaves_data.tp().values
+        ),
         color="darkred",
     )
     axes[1].plot([0, 20], [0, 20], c="darkred", linestyle="--")
@@ -269,10 +273,10 @@ def plot_wave_series(
     axes[1].set_ylabel("Tp - BinWaves [s]")
     axes[1].set_xlim([0, 20])
     axes[1].set_ylim([0, 20])
-    dpm = np.vstack([buoy_data.dpm().values, binwaves_data.dpm().values])
+    dpm = np.vstack([buoy_data["Dir_Buoy"].values, binwaves_data.dpm().values])
     dpm = gaussian_kde(dpm)(dpm)
     axes[2].scatter(
-        buoy_data.dpm().values,
+        buoy_data["Dir_Buoy"].values,
         binwaves_data.dpm().values,
         s=1,
         c=dpm,
@@ -282,7 +286,9 @@ def plot_wave_series(
     axes[2].text(
         250,
         25,
-        create_text_with_metrics(buoy_data.dpm().values, binwaves_data.dpm().values),
+        create_text_with_metrics(
+            buoy_data["Dir_Buoy"].values, binwaves_data.dpm().values
+        ),
         color="darkred",
     )
     axes[2].plot([0, 360], [0, 360], c="darkred", linestyle="--")
