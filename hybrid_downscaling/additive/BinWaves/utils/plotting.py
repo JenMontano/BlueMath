@@ -1,30 +1,13 @@
-import cartopy.crs as ccrs
-import cartopy.feature as cfeature
-import matplotlib.pyplot as plt
 import numpy as np
-import wavespectra
 import xarray as xr
-from bluemath_tk.core.operations import get_uv_components
-from matplotlib import colors
 from scipy.stats import gaussian_kde
+import wavespectra
 
-my_feature = cfeature.NaturalEarthFeature(
-    "physical",
-    "coastline",
-    "10m",
-    edgecolor="black",
-)
+import matplotlib.pyplot as plt
+from matplotlib import colors
 
-
-def plot_bathymetry(data: xr.DataArray, **kwargs):
-    p = data.plot.contourf(
-        levels=[0, -50, -100, -250, -500, -1000, -2000],
-        transform=ccrs.PlateCarree(),
-        subplot_kws={"projection": ccrs.Orthographic(-3.5, 43.5)},
-        **kwargs,
-    )
-    # p.axes.add_feature(my_feature)
-    p.axes.gridlines(draw_labels=True)
+from bluemath_tk.core.operations import get_uv_components
+from bluemath_tk.core.plotting.colors import colormap_spectra
 
 
 def plot_cases_grid(
@@ -39,7 +22,7 @@ def plot_cases_grid(
             ax.pcolor(
                 (
                     data.sel(case_num=i)
-                    .isel(Xp=slice(None, None, 15), Yp=slice(None, None, 15))
+                    .isel(Xp=slice(None, None, 25), Yp=slice(None, None, 25))
                     .values
                 ),
                 cmap="RdBu_r",
@@ -359,46 +342,80 @@ def create_custom_bathy_cmap():
     return custom_cmap
 
 
-def plot_spectrum_in_coastline(bathy, reconstructed_onshore_spectra, offshore_spectra):
-    fig, ax = plt.subplots(
-        figsize=(8, 5),
-    )
+def plot_spectrum_in_coastline(
+    bathy: xr.DataArray,
+    reconstructed_onshore_spectra: xr.Dataset,
+    reconstruction_kps: xr.Dataset,
+    offshore_spectra: xr.Dataset,
+    time_to_plot: str,
+    sites_for_spectrum: list,
+    ortophoto: np.ndarray,
+):
+    """
+    Plot gridded graph!
+    """
+    
+    fig, ax = plt.subplots(figsize=(15, 6))
 
-    bathy.elevation.T.plot(
-        ax=ax,
+    # Plot bathymetry as a countour
+    bathy.plot.contourf(
+        ax=ax, 
+        levels=[0, -100, -200, -500, -1000], 
+        cmap="terrain", 
         add_colorbar=False,
-        robust=True,
-        # cbar_kwargs={
-        #     "label": "Elevation [m]",
-        #     "orientation": "horizontal",
-        # },
-        cmap=create_custom_bathy_cmap(),
     )
-    ax.set_ylim(43.2, 43.65)
-    ax.set_xlim(-4.1, -3.25)
-    ax.set_aspect("equal")
 
-    interp_dir = np.linspace(0, 360, 24)
-    interp_freq = np.linspace(1 / 20, 1 / 5, 10)
-    lons = [-3.46000001, -3.87999998]
-    lats = [43.48999999, 43.49000004]
+    # Plot reconstructed Hs in grid
+    hs_map = reconstructed_onshore_spectra.sel(
+        time=time_to_plot, method="nearest"
+    ).kp.spec.hs().values.reshape(
+        reconstruction_kps.utm_x.size, reconstruction_kps.utm_y.size
+    ).T
+    phs = ax.pcolormesh(
+        reconstruction_kps.utm_x.values,
+        reconstruction_kps.utm_y.values,
+        hs_map,
+        vmin=0,
+        vmax=3,
+        cmap=colormap_spectra(),
+    )
+    plt.colorbar(phs).set_label("Hs [m]")
 
-    # Plot onshore spectra
-    for i, (lon, lat) in enumerate(zip(lons, lats)):
+    # Plot reconstructed Dir in grid
+    u_map, v_map = get_uv_components(
+        reconstructed_onshore_spectra.sel(
+            time=time_to_plot, method="nearest"
+        ).kp.spec.dpm().values
+    )
+    ax.quiver(
+        reconstruction_kps.utm_x.values,
+        reconstruction_kps.utm_y.values,
+        -u_map.reshape(
+            reconstruction_kps.utm_x.size, reconstruction_kps.utm_y.size
+        ).T,
+        -v_map.reshape(
+            reconstruction_kps.utm_x.size, reconstruction_kps.utm_y.size
+        ).T,
+        width=0.002,
+    )
+
+    # Plot onshore spectra at sites
+    for site in sites_for_spectrum:
+        lon = reconstructed_onshore_spectra.utm_x.values[site]
+        lat = reconstructed_onshore_spectra.utm_y.values[site]
         axin = ax.inset_axes(
-            [lon, lat, 0.1, 0.1], transform=ax.transData, projection="polar"
+            [lon, lat, 10000, 10000], transform=ax.transData, projection="polar"
         )
-        axin.pcolor(
-            np.deg2rad(interp_dir),
-            interp_freq,
-            (
-                reconstructed_onshore_spectra.sel(site=(i + 1), time="2009-12")
-                .efth.mean(dim="time")
-                .spec.interp(freq=interp_freq, dir=interp_dir)
-                .values
+        ax.scatter(lon, lat, c="black", marker="*", s=500)
+        axin.pcolormesh(
+            np.deg2rad(reconstructed_onshore_spectra.dir.values),
+            reconstructed_onshore_spectra.freq.values,
+            np.sqrt(
+                reconstructed_onshore_spectra.sel(time=time_to_plot, method="nearest")
+                .isel(site=site)
+                .kp
             ),
-            zorder=10,
-            cmap=create_white_zero_colormap("Spectral"),
+            cmap=colormap_spectra(),
         )
         axin.set_theta_zero_location("N", offset=0)
         axin.set_theta_direction(-1)
@@ -406,30 +423,38 @@ def plot_spectrum_in_coastline(bathy, reconstructed_onshore_spectra, offshore_sp
 
     # Plot offshore spectrum
     axoff = ax.inset_axes(
-        [-4.05, 43.25, 0.1, 0.1], transform=ax.transData, projection="polar"
+        [465000, 4825000, 10000, 10000], transform=ax.transData, projection="polar"
     )
-    axoff.pcolor(
-        np.deg2rad(interp_dir),
-        interp_freq,
-        (
-            offshore_spectra.sel(time="2009-12")
-            .efth.mean(dim="time")
-            .spec.interp(freq=interp_freq, dir=interp_dir)
-            .values
-        ),
-        zorder=10,
-        cmap=create_white_zero_colormap("Spectral"),
+    axoff.pcolormesh(
+        np.deg2rad(offshore_spectra.dir.values),
+        offshore_spectra.freq.values,
+        np.sqrt(offshore_spectra.sel(time=time_to_plot, method="nearest").efth),
+        cmap=colormap_spectra(),
     )
     axoff.set_theta_zero_location("N", offset=0)
     axoff.set_theta_direction(-1)
     axoff.axis("off")
-    # Add text descriptio in figuro
+    # Add text description in figure
     ax.text(
-        -3.92,
-        43.25,
+        465000,
+        4823000,
         "Offshore Spectra",
         fontsize=12,
-        bbox=dict(facecolor="darkred", alpha=0.5),
+        bbox=dict(facecolor="white"),
+    )
+
+    # Plot ortophoto of Cantabria
+    image_bounds = (
+        410000.0, 
+        479197.6875,
+        4802379.0, 
+        4837093.5,
+    )
+    ax.axis(image_bounds)
+    ax.imshow(
+        ortophoto,
+        extent=image_bounds,
+        zorder=10,
     )
 
     return fig, ax
