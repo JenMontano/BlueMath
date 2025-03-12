@@ -1,3 +1,0 @@
-cmocean
-bokeh>=3.1.0
-bluemath-tk[waves]>=1.0.21
