@@ -359,7 +359,7 @@ def plot_spectrum_in_coastline(
     bathy.plot.contourf(
         ax=ax,
         levels=[0, -100, -200, -500, -1000],
-        cmap="terrain",
+        cmap="Blues_r",
         add_colorbar=False,
     )
 
