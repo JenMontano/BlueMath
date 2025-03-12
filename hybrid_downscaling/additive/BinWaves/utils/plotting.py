@@ -1,13 +1,11 @@
-import numpy as np
-import xarray as xr
-from scipy.stats import gaussian_kde
-import wavespectra
-
 import matplotlib.pyplot as plt
-from matplotlib import colors
-
+import numpy as np
+import wavespectra
+import xarray as xr
 from bluemath_tk.core.operations import get_uv_components
 from bluemath_tk.core.plotting.colors import colormap_spectra
+from matplotlib import colors
+from scipy.stats import gaussian_kde
 
 
 def plot_cases_grid(
@@ -22,7 +20,7 @@ def plot_cases_grid(
             ax.pcolor(
                 (
                     data.sel(case_num=i)
-                    .isel(Xp=slice(None, None, 25), Yp=slice(None, None, 25))
+                    .isel(Xp=slice(None, None, 5), Yp=slice(None, None, 5))
                     .values
                 ),
                 cmap="RdBu_r",
@@ -354,23 +352,24 @@ def plot_spectrum_in_coastline(
     """
     Plot gridded graph!
     """
-    
+
     fig, ax = plt.subplots(figsize=(15, 6))
 
     # Plot bathymetry as a countour
     bathy.plot.contourf(
-        ax=ax, 
-        levels=[0, -100, -200, -500, -1000], 
-        cmap="terrain", 
+        ax=ax,
+        levels=[0, -100, -200, -500, -1000],
+        cmap="terrain",
         add_colorbar=False,
     )
 
     # Plot reconstructed Hs in grid
-    hs_map = reconstructed_onshore_spectra.sel(
-        time=time_to_plot, method="nearest"
-    ).kp.spec.hs().values.reshape(
-        reconstruction_kps.utm_x.size, reconstruction_kps.utm_y.size
-    ).T
+    hs_map = (
+        reconstructed_onshore_spectra.sel(time=time_to_plot, method="nearest")
+        .kp.spec.hs()
+        .values.reshape(reconstruction_kps.utm_x.size, reconstruction_kps.utm_y.size)
+        .T
+    )
     phs = ax.pcolormesh(
         reconstruction_kps.utm_x.values,
         reconstruction_kps.utm_y.values,
@@ -383,19 +382,15 @@ def plot_spectrum_in_coastline(
 
     # Plot reconstructed Dir in grid
     u_map, v_map = get_uv_components(
-        reconstructed_onshore_spectra.sel(
-            time=time_to_plot, method="nearest"
-        ).kp.spec.dpm().values
+        reconstructed_onshore_spectra.sel(time=time_to_plot, method="nearest")
+        .kp.spec.dpm()
+        .values
     )
     ax.quiver(
         reconstruction_kps.utm_x.values,
         reconstruction_kps.utm_y.values,
-        -u_map.reshape(
-            reconstruction_kps.utm_x.size, reconstruction_kps.utm_y.size
-        ).T,
-        -v_map.reshape(
-            reconstruction_kps.utm_x.size, reconstruction_kps.utm_y.size
-        ).T,
+        -u_map.reshape(reconstruction_kps.utm_x.size, reconstruction_kps.utm_y.size).T,
+        -v_map.reshape(reconstruction_kps.utm_x.size, reconstruction_kps.utm_y.size).T,
         width=0.002,
     )
 
@@ -445,9 +440,9 @@ def plot_spectrum_in_coastline(
 
     # Plot ortophoto of Cantabria
     image_bounds = (
-        410000.0, 
+        410000.0,
         479197.6875,
-        4802379.0, 
+        4802379.0,
         4837093.5,
     )
     ax.axis(image_bounds)
