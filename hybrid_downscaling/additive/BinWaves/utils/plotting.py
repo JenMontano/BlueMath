@@ -122,7 +122,7 @@ def plot_case_variables(data: xr.Dataset):
     for ax in axes:
         ax.set_aspect("equal")
         ax.axis("off")
-        step = 50
+        step = 10
         ax.quiver(
             data["Xp"][::step],
             data["Yp"][::step],
