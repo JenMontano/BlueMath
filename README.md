@@ -1,4 +1,6 @@
-# BlueMath Notebooks
+# BlueMath
+
+<img src="assets/bluemath.png" alt="picture" width="800"/>
 
 ## Tips
 
