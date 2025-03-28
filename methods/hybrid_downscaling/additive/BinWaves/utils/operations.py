@@ -41,7 +41,7 @@ def transform_ERA5_spectrum(
     ):
         try:
             case_num_spectra.append(
-                ds.efth.sel(freq=case_freq, dir=case_dir).expand_dims(
+                ds.efth.sel(freq=case_freq, dir=case_dir, method="nearest").expand_dims(
                     {"case_num": [case_num]}
                 )
             )
