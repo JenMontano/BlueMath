@@ -358,7 +358,7 @@ def plot_spectrum_in_coastline(
     # Plot bathymetry as a countour
     bathy.plot.contourf(
         ax=ax,
-        levels=[0, -100, -200, -500, -1000],
+        levels=[0, -10, -25, -50, -100, -200, -500, -1000],
         cmap="Blues_r",
         add_colorbar=False,
     )
@@ -367,32 +367,29 @@ def plot_spectrum_in_coastline(
     hs_map = (
         reconstructed_onshore_spectra.sel(time=time_to_plot, method="nearest")
         .kp.spec.hs()
-        .values.reshape(reconstruction_kps.utm_x.size, reconstruction_kps.utm_y.size)
-        .T
+        .values
     )
-    phs = ax.pcolormesh(
+    phs = ax.scatter(
         reconstruction_kps.utm_x.values,
         reconstruction_kps.utm_y.values,
-        hs_map,
-        vmin=0,
-        vmax=3,
+        c=hs_map,
         cmap=colormap_spectra(),
     )
     plt.colorbar(phs).set_label("Hs [m]")
 
     # Plot reconstructed Dir in grid
-    u_map, v_map = get_uv_components(
-        reconstructed_onshore_spectra.sel(time=time_to_plot, method="nearest")
-        .kp.spec.dpm()
-        .values
-    )
-    ax.quiver(
-        reconstruction_kps.utm_x.values,
-        reconstruction_kps.utm_y.values,
-        -u_map.reshape(reconstruction_kps.utm_x.size, reconstruction_kps.utm_y.size).T,
-        -v_map.reshape(reconstruction_kps.utm_x.size, reconstruction_kps.utm_y.size).T,
-        width=0.002,
-    )
+    # u_map, v_map = get_uv_components(
+    #     reconstructed_onshore_spectra.sel(time=time_to_plot, method="nearest")
+    #     .kp.spec.dpm()
+    #     .values
+    # )
+    # ax.quiver(
+    #     reconstruction_kps.utm_x.values,
+    #     reconstruction_kps.utm_y.values,
+    #     -u_map.reshape(reconstruction_kps.utm_x.size, reconstruction_kps.utm_y.size).T,
+    #     -v_map.reshape(reconstruction_kps.utm_x.size, reconstruction_kps.utm_y.size).T,
+    #     width=0.002,
+    # )
 
     # Plot onshore spectra at sites
     for site in sites_for_spectrum:

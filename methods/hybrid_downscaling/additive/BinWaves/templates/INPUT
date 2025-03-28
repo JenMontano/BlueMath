@@ -1,29 +1,29 @@
 $*************************HEADING************************
 $
-PROJ 'CAN' '{{ case_num }}'
+PROJ 'PROJ' '{{ case_num }}'
 $
 $********************MODEL INPUT*************************$
 MODE STAT
 COORDINATES CARTESIAN 
 SET level=0   NAUTICAL
 $
-CGRID REGULAR 410000 4802379 0 70000 35620 135 67 CIRCLE 120 0.03 1.0 
+CGRID REGULAR {{ xpc }} {{ ypc }} {{ alpc }} {{ xlenc }} {{ ylenc }} {{ mxc }} {{ myc }} CIRCLE {{ mdc }} {{ flow }} {{ fhigh }}
 $
-INPGRID BOTTOM REGULAR 409888.026 4802179.317 0 139 71 500.0 500.0
-READINP BOTTOM 1 'depth_reduced.dat' 1 0 FREE
+INPGRID BOTTOM REGULAR {{ xpinp }} {{ ypinp }} {{ alpinp }} {{ mxinp }} {{ myinp }} {{ dxinp }} {{ dyinp }}
+READINP BOTTOM 1 'depth.dat' 1 0 FREE
 $
-BOUndspec SIDE N CONstant PAR {{ hs }} {{ tp }} {{ dir }} {{ spr }}
-BOUndspec SIDE E CONstant PAR {{ hs }} {{ tp }} {{ dir }} {{ spr }}
-BOUndspec SIDE W CONstant PAR {{ hs }} {{ tp }} {{ dir }} {{ spr }}
-BOUndspec SIDE S CONstant PAR {{ hs }} {{ tp }} {{ dir }} {{ spr }}
+BOUndspec SIDE N CONstant FILE 'input_spectra_N.bnd'
+BOUndspec SIDE E CONstant FILE 'input_spectra_E.bnd'
+BOUndspec SIDE W CONstant FILE 'input_spectra_W.bnd'
+BOUndspec SIDE S CONstant FILE 'input_spectra_S.bnd'
 $
 FRICTION JONSWAP
 BREAKING
 $
 OFF QUAD
 $
-POINTS 'BUOYS' FILE 'buoys.loc'
-SPECOUT 'BUOYS' SPEC2D 'output.spec'
+POINTS 'LOC' FILE 'locations.loc'
+SPECOUT 'LOC' SPEC2D 'output.spec'
 BLOCK 'COMPGRID' NOHEAD 'output.mat' LAY 3 XP YP DEPTH HSIGN TM02 DIR PDIR TPS DSPR PTHSIGN PTRTP PTDIR PTDSPR
 $
 TEST  1,0
