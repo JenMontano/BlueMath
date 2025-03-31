@@ -40,11 +40,13 @@ def transform_ERA5_spectrum(
         np.array(subset_parameters.get("freq"))[available_case_num],
     ):
         try:
-            case_num_spectra.append(
-                ds.efth.sel(freq=case_freq, dir=case_dir, method="nearest").expand_dims(
-                    {"case_num": [case_num]}
-                )
+            closest_case = (
+                ds.efth
+                .sel(freq=case_freq, method="nearest", tolerance=0.001)
+                .sel(dir=case_dir, method="nearest", tolerance=2)
+                .expand_dims({"case_num": [case_num]})
             )
+            case_num_spectra.append(closest_case)
         except Exception as _e:
             # Add a zeros array if the case number is not available
             case_num_spectra.append(
