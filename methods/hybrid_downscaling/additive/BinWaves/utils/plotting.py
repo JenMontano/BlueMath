@@ -7,20 +7,83 @@ from bluemath_tk.core.plotting.colors import colormap_spectra
 from matplotlib import colors
 from scipy.stats import gaussian_kde
 
+import matplotlib.pyplot as plt
+import matplotlib.image as mimg
+from matplotlib.patches import Rectangle
+
+
+def plot_selected_bathy(bathy: xr.DataArray):
+    # Plot ortophoto of Cantabria
+    ortophoto = mimg.imread("outputs/ortophoto_cantabria.png")
+    image_bounds = (
+        410000.0,
+        479197.6875,
+        4802379.0,
+        4837093.5,
+    )
+    fig, ax = plt.subplots(figsize=(12, 5))
+    bathy.plot.contourf(ax=ax, levels=[10, 25, 50, 100, 200, 300, 500, 1000], cmap="Blues")
+    grid = ax.pcolor(
+        bathy.lon.values[:-1],
+        bathy.lat.values[1:],
+        bathy.values[:-1, 1:],
+        edgecolors="black",  # Color of the grid lines
+        linewidth=0.5,       # Thickness of the grid lines
+        facecolors="none",   # No face filling
+        alpha=0.5,           # Transparency of the grid lines
+    )
+    grid.set_edgecolor("black")  # Ensure edges are black
+    ax.scatter(428845.10, 4815606.89, c="darkred")
+    ax.annotate(
+        "Validation Buoy",
+        xy=(428845.10, 4815606.89),  # Arrow tip
+        xytext=(428845.10 - 1000, 4815606.89 + 5000),  # Text position
+        arrowprops=dict(color="darkred", arrowstyle="->"),
+        fontsize=10,
+        color="darkred",
+    )
+    ax.imshow(
+        ortophoto,
+        extent=image_bounds,
+        zorder=10,
+    )
+    rect = Rectangle(
+        (bathy.lon.min(), bathy.lat.min()),  # Bottom-left corner
+        bathy.lon.max() - bathy.lon.min(),  # Width
+        bathy.lat.max() - bathy.lat.min(),  # Height
+        linewidth=3,
+        edgecolor="orange",
+        facecolor="none",
+        zorder=15,
+    )
+    ax.annotate(
+        "Bathymetry Area",
+        xy=(bathy.lon.max(), bathy.lat.max() - 5000),  # Arrow tip
+        xytext=(bathy.lon.max() + 2500, bathy.lat.max() - 10000),  # Text position
+        arrowprops=dict(color="orange", arrowstyle="->"),
+        fontsize=10,
+        color="orange",
+    )
+    ax.add_patch(rect)
+    ax.axis(image_bounds)
+    ax.set_aspect("equal")
+
 
 def plot_cases_grid(
     data: xr.DataArray,
     cases_to_plot: list = [0, 320, 615],
     colors_to_plot: list = ["green", "orange", "purple"],
+    num_directions: int = 24,
+    num_frequencies: int = 29,
 ):
     # Plot all cases in a grid
-    fig, axes = plt.subplots(ncols=29, nrows=24, figsize=(29, 15))
+    fig, axes = plt.subplots(ncols=num_frequencies, nrows=num_directions, figsize=(29, 15))
     for i, ax in enumerate(axes.flat):
         try:
             ax.pcolor(
                 (
                     data.sel(case_num=i)
-                    .isel(Xp=slice(None, None, 5), Yp=slice(None, None, 5))
+                    .isel(Xp=slice(None, None, 3), Yp=slice(None, None, 3))
                     .values
                 ),
                 cmap="RdBu_r",
@@ -122,7 +185,7 @@ def plot_case_variables(data: xr.Dataset):
     for ax in axes:
         ax.set_aspect("equal")
         ax.axis("off")
-        step = 10
+        step = 3
         ax.quiver(
             data["Xp"][::step],
             data["Yp"][::step],
