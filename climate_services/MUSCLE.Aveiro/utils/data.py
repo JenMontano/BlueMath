@@ -18,9 +18,9 @@ def load_atmospheric_predictor(
     era5 = (
         era5
         .sel(
-            latitude=slice(region[3], region[1], 3), 
-            longitude=slice(region[0], region[2], 3), 
-            time=slice("1980", None)
+            latitude=slice(region[3], region[1], 4), 
+            longitude=slice(region[0], region[2], 4), 
+            time=slice("2000", None)
         )
         .load()
         # .coarsen(longitude=2, latitude=2).mean()
