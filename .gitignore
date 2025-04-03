@@ -177,6 +177,8 @@ cython_debug/
 *.mat
 *.tab
 *.dat
+*.sav
+*.pk
 
 # Cases directories
 *CAN_cases/
