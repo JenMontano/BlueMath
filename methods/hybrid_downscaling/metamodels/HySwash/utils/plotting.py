@@ -206,3 +206,34 @@ def show_graph_for_all_vegetations(pca: PCA, rbf: RBF, depth, hs=2.0, hs_l0=0.02
     ax.set_title(
         f"Reconstructed Hs for Hs: {hs}, Hs_L0: {hs_l0} and different vegetation heights"
     )
+
+def plot_depthfile(depthfile):
+        'Plot bathymetry data including friction or vegetation area in case active commands'
+
+        depth = np.loadtxt(depthfile)
+        x = range(len(depth))
+
+        fig, ax = plt.subplots(1, figsize = (11, 4))
+
+        ax.fill_between(
+            x, - depth[0],  np.zeros((len(depth))),
+            facecolor = "deepskyblue",
+            alpha = 0.5,
+            zorder = 1,
+        )
+        ax.fill_between(
+            x, np.zeros((len(depth))) - depth[0],  -depth,
+            facecolor = "wheat",
+            alpha = 1,
+            zorder = 2,
+        )
+        ax.plot(
+            x, -depth,
+            color = 'k',
+            zorder = 3,
+        )
+
+        ax.set_xlim(x[0], x[-1])
+        ax.set_ylim(-depth[0], None)
+
+        
