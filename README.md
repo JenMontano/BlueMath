@@ -4,7 +4,7 @@ BlueMath is an open-source Python repository designed for the development of bot
 
 <img src="assets/bluemath.png" alt="picture" width="800"/>
 
-At its core lies an open-source package called bluemath-tk, which includes a wide range of tools; from data mining statistical models to wrappers for numerical models. These tools allow users to easily combine both statistical and numerical methods.
+At its core lies an open-source package called [BlueMath-tk](https://github.com/GeoOcean/BlueMath_tk), which includes a wide range of tools; from data mining statistical models to wrappers for numerical models. These tools allow users to easily combine both statistical and numerical methods.
 
 BlueMath is designed to be cross-platform and highly efficient when running in the cloud. This enables users to conduct rapid testing in cloud environments like GitHub DevContainers, etc., and run complex metamodels locally or on computing clusters, thanks to generalized parallelization functions.
 
