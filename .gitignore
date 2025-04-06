@@ -183,3 +183,6 @@ cython_debug/
 # Cases directories
 *CAN_cases/
 *Veggy_cases/
+
+# MacOS
+*.DS_Store
