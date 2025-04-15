@@ -207,33 +207,59 @@ def show_graph_for_all_vegetations(pca: PCA, rbf: RBF, depth, hs=2.0, hs_l0=0.02
         f"Reconstructed Hs for Hs: {hs}, Hs_L0: {hs_l0} and different vegetation heights"
     )
 
-def plot_depthfile(depthfile):
-        'Plot bathymetry data including friction or vegetation area in case active commands'
+def plot_depthfile(depthfile, ax=None, xlim=None, dxinp=1):
+    """
+    Plot depthfile
+    Parameters
+    ----------
+    depthfile : str
+        Path to the depth file.
+    ax : matplotlib.axes.Axes, optional
+        Axes to plot on.
+    xlim : tuple, optional
+        x-axis limits.
+    dxinp : float, optional
+        Increment in x direction.
+    Returns
+    -------
+    None
+    """
 
-        depth = np.loadtxt(depthfile)
-        x = range(len(depth))
+    'Plot bathymetry data including friction or vegetation area in case active commands'
 
-        fig, ax = plt.subplots(1, figsize = (11, 4))
+    depth = np.loadtxt(depthfile)
+    x = np.arange(0,len(depth)*dxinp,dxinp)
 
-        ax.fill_between(
-            x, - depth[0],  np.zeros((len(depth))),
-            facecolor = "deepskyblue",
-            alpha = 0.5,
-            zorder = 1,
-        )
-        ax.fill_between(
-            x, np.zeros((len(depth))) - depth[0],  -depth,
-            facecolor = "wheat",
-            alpha = 1,
-            zorder = 2,
-        )
-        ax.plot(
-            x, -depth,
-            color = 'k',
-            zorder = 3,
-        )
+    if not ax:
+        fig, ax = plt.subplots(1, figsize = (11, 3))
+    ax.fill_between(
+        x, - depth[0],  np.zeros((len(depth))),
+        facecolor = "deepskyblue",
+        alpha = 0.5,
+        zorder = 1,
+    )
+    ax.fill_between(
+        x, np.zeros((len(depth))) - depth[0],  -depth,
+        facecolor = "wheat",
+        alpha = 1,
+        zorder = 2,
+    )
+    ax.plot(
+        x, -depth,
+        color = 'k',
+        zorder = 3,
+    )
 
-        ax.set_xlim(x[0], x[-1])
-        ax.set_ylim(-depth[0], None)
+    if not xlim:
+            ax.set_xlim(x[0], x[-1])
+    ax.set_xlim(xlim)
+    ax.set_ylim(-depth[0], None)
+    ax.set_ylabel('Depth (m)')
+    ax.set_xlabel('Distance (m)')
+
+    ax.spines['top'].set_visible(False)
+    ax.spines['bottom'].set_visible(False)
+    ax.spines['left'].set_visible(False)
+    ax.spines['right'].set_visible(False)
 
         
