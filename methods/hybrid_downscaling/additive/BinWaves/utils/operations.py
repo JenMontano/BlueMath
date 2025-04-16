@@ -41,8 +41,7 @@ def transform_ERA5_spectrum(
     ):
         try:
             closest_case = (
-                ds.efth
-                .sel(freq=case_freq, method="nearest", tolerance=0.001)
+                ds.efth.sel(freq=case_freq, method="nearest", tolerance=0.001)
                 .sel(dir=case_dir, method="nearest", tolerance=2)
                 .expand_dims({"case_num": [case_num]})
             )

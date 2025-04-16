@@ -1,3 +1,4 @@
+import matplotlib.image as mimg
 import matplotlib.pyplot as plt
 import numpy as np
 import wavespectra
@@ -5,11 +6,8 @@ import xarray as xr
 from bluemath_tk.core.operations import get_uv_components
 from bluemath_tk.core.plotting.colors import colormap_spectra
 from matplotlib import colors
-from scipy.stats import gaussian_kde
-
-import matplotlib.pyplot as plt
-import matplotlib.image as mimg
 from matplotlib.patches import Rectangle
+from scipy.stats import gaussian_kde
 
 
 def plot_selected_bathy(bathy: xr.DataArray):
@@ -22,15 +20,17 @@ def plot_selected_bathy(bathy: xr.DataArray):
         4837093.5,
     )
     fig, ax = plt.subplots(figsize=(12, 5))
-    bathy.plot.contourf(ax=ax, levels=[10, 25, 50, 100, 200, 300, 500, 1000], cmap="Blues")
+    bathy.plot.contourf(
+        ax=ax, levels=[10, 25, 50, 100, 200, 300, 500, 1000], cmap="Blues"
+    )
     grid = ax.pcolor(
         bathy.lon.values[:-1],
         bathy.lat.values[1:],
         bathy.values[:-1, 1:],
         edgecolors="black",  # Color of the grid lines
-        linewidth=0.5,       # Thickness of the grid lines
-        facecolors="none",   # No face filling
-        alpha=0.5,           # Transparency of the grid lines
+        linewidth=0.5,  # Thickness of the grid lines
+        facecolors="none",  # No face filling
+        alpha=0.5,  # Transparency of the grid lines
     )
     grid.set_edgecolor("black")  # Ensure edges are black
     ax.scatter(428845.10, 4815606.89, c="darkred")
@@ -77,7 +77,9 @@ def plot_cases_grid(
     num_frequencies: int = 29,
 ):
     # Plot all cases in a grid
-    fig, axes = plt.subplots(ncols=num_frequencies, nrows=num_directions, figsize=(29, 15))
+    fig, axes = plt.subplots(
+        ncols=num_frequencies, nrows=num_directions, figsize=(29, 15)
+    )
     for i, ax in enumerate(axes.flat):
         try:
             ax.pcolor(
