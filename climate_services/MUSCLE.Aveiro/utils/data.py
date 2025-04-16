@@ -13,16 +13,16 @@ def load_atmospheric_predictor(
     Load atmospheric predictor data for the given region
     """
 
-    era5 = xr.open_dataset("https://geoocean.sci.unican.es/thredds/dodsC/geoocean/era5-msl")
+    era5 = xr.open_dataset(
+        "https://geoocean.sci.unican.es/thredds/dodsC/geoocean/era5-msl"
+    )
     era5["time"] = era5["time"].astype("timedelta64[D]") + np.datetime64("1940-01-01")
     era5 = (
-        era5
-        .sel(
-            latitude=slice(region[3], region[1], 4), 
-            longitude=slice(region[0], region[2], 4), 
-            time=slice("1970", None)
-        )
-        .load()
+        era5.sel(
+            latitude=slice(region[3], region[1], 4),
+            longitude=slice(region[0], region[2], 4),
+            time=slice("1970", None),
+        ).load()
         # .coarsen(longitude=2, latitude=2).mean()
     )
 
