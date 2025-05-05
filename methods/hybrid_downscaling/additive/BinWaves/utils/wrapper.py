@@ -88,15 +88,15 @@ class BinWavesWrapper(SwanModelWrapper):
         depth_array = depth_dataarray.values
         locations_x, locations_y = np.meshgrid(
             depth_dataarray.sel(
-                lon=slice(425000, 440000), lat=slice(4820000, None)
+                lon=slice(552000, 728000), lat=slice(3430000, 4093000)
             ).lon.values,
             depth_dataarray.sel(
-                lon=slice(425000, 440000), lat=slice(4820000, None)
-            ).lat.values,
+                lon=slice(552000, 728000), lat=slice(3430000, 4093000)
+            ).lat.values
         )
         self.locations = np.column_stack((locations_x.ravel(), locations_y.ravel()))
         # Add Virgen del Mar exact buoy location
-        self.locations = np.vstack((self.locations, [428845.10, 4815606.89]))
+        # self.locations = np.vstack((self.locations, [428845.10, 4815606.89]))
 
         super().__init__(
             templates_dir=templates_dir,

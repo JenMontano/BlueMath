@@ -8,66 +8,122 @@ from bluemath_tk.core.plotting.colors import colormap_spectra
 from matplotlib import colors
 from matplotlib.patches import Rectangle
 from scipy.stats import gaussian_kde
+import cartopy.crs as ccrs
+import cartopy.feature as cfeature
+import xarray as xr
 
 
-def plot_selected_bathy(bathy: xr.DataArray):
-    # Plot ortophoto of Cantabria
-    ortophoto = mimg.imread("outputs/ortophoto_cantabria.png")
-    image_bounds = (
-        410000.0,
-        479197.6875,
-        4802379.0,
-        4837093.5,
-    )
-    fig, ax = plt.subplots(figsize=(12, 5))
+# def plot_selected_bathy(bathy: xr.DataArray):
+#     # Plot ortophoto of Cantabria
+#     ortophoto = mimg.imread("outputs/ortophoto_cantabria.png")
+#     image_bounds = (
+#         410000.0,
+#         479197.6875,
+#         4802379.0,
+#         4837093.5,
+#     )
+#     fig, ax = plt.subplots(figsize=(12, 5))
+#     bathy.plot.contourf(
+#         ax=ax, levels=[10, 25, 50, 100, 200, 300, 500, 1000], cmap="Blues"
+#     )
+#     grid = ax.pcolor(
+#         bathy.lon.values[:-1],
+#         bathy.lat.values[1:],
+#         bathy.values[:-1, 1:],
+#         edgecolors="black",  # Color of the grid lines
+#         linewidth=0.5,  # Thickness of the grid lines
+#         facecolors="none",  # No face filling
+#         alpha=0.5,  # Transparency of the grid lines
+#     )
+#     grid.set_edgecolor("black")  # Ensure edges are black
+#     ax.scatter(428845.10, 4815606.89, c="darkred")
+#     ax.annotate(
+#         "Validation Buoy",
+#         xy=(428845.10, 4815606.89),  # Arrow tip
+#         xytext=(428845.10 - 1000, 4815606.89 + 5000),  # Text position
+#         arrowprops=dict(color="darkred", arrowstyle="->"),
+#         fontsize=10,
+#         color="darkred",
+#     )
+#     ax.imshow(
+#         ortophoto,
+#         extent=image_bounds,
+#         zorder=10,
+#     )
+#     rect = Rectangle(
+#         (bathy.lon.min(), bathy.lat.min()),  # Bottom-left corner
+#         bathy.lon.max() - bathy.lon.min(),  # Width
+#         bathy.lat.max() - bathy.lat.min(),  # Height
+#         linewidth=3,
+#         edgecolor="orange",
+#         facecolor="none",
+#         zorder=15,
+#     )
+#     ax.annotate(
+#         "Bathymetry Area",
+#         xy=(bathy.lon.max(), bathy.lat.max() - 5000),  # Arrow tip
+#         xytext=(bathy.lon.max() + 2500, bathy.lat.max() - 10000),  # Text position
+#         arrowprops=dict(color="orange", arrowstyle="->"),
+#         fontsize=10,
+#         color="orange",
+#     )
+#     ax.add_patch(rect)
+#     ax.axis(image_bounds)
+#     ax.set_aspect("equal")
+
+
+def plot_selected_bathy(bathy: xr.DataArray, utm_zone=18):
+    # Set up the projection (change zone if needed)
+    proj = ccrs.UTM(zone=utm_zone)
+    fig, ax = plt.subplots(figsize=(12, 5), subplot_kw={'projection': proj})
+
+    # Plot bathymetry
     bathy.plot.contourf(
-        ax=ax, levels=[10, 25, 50, 100, 200, 300, 500, 1000], cmap="Blues"
+        ax=ax, levels=[10, 25, 50, 100, 200, 300, 500, 1000], cmap="Blues",
+        transform=proj
     )
     grid = ax.pcolor(
         bathy.lon.values[:-1],
         bathy.lat.values[1:],
         bathy.values[:-1, 1:],
-        edgecolors="black",  # Color of the grid lines
-        linewidth=0.5,  # Thickness of the grid lines
-        facecolors="none",  # No face filling
-        alpha=0.5,  # Transparency of the grid lines
+        edgecolors="black",
+        linewidth=0.5,
+        facecolors="none",
+        alpha=0.5,
+        transform=proj
     )
-    grid.set_edgecolor("black")  # Ensure edges are black
-    ax.scatter(428845.10, 4815606.89, c="darkred")
-    ax.annotate(
-        "Validation Buoy",
-        xy=(428845.10, 4815606.89),  # Arrow tip
-        xytext=(428845.10 - 1000, 4815606.89 + 5000),  # Text position
-        arrowprops=dict(color="darkred", arrowstyle="->"),
-        fontsize=10,
-        color="darkred",
-    )
-    ax.imshow(
-        ortophoto,
-        extent=image_bounds,
-        zorder=10,
-    )
+    grid.set_edgecolor("black")
+
+    # Add coastline
+    ax.add_feature(cfeature.COASTLINE, linewidth=1.5, zorder=20)
+
+    # Rectangle and annotation
     rect = Rectangle(
-        (bathy.lon.min(), bathy.lat.min()),  # Bottom-left corner
-        bathy.lon.max() - bathy.lon.min(),  # Width
-        bathy.lat.max() - bathy.lat.min(),  # Height
+        (bathy.lon.min(), bathy.lat.min()),
+        bathy.lon.max() - bathy.lon.min(),
+        bathy.lat.max() - bathy.lat.min(),
         linewidth=3,
         edgecolor="orange",
         facecolor="none",
         zorder=15,
+        transform=proj
     )
+    ax.add_patch(rect)
     ax.annotate(
         "Bathymetry Area",
-        xy=(bathy.lon.max(), bathy.lat.max() - 5000),  # Arrow tip
-        xytext=(bathy.lon.max() + 2500, bathy.lat.max() - 10000),  # Text position
+        xy=(bathy.lon.max(), bathy.lat.max() - 5000),
+        xytext=(bathy.lon.max() + 2500, bathy.lat.max() - 10000),
         arrowprops=dict(color="orange", arrowstyle="->"),
         fontsize=10,
         color="orange",
+        transform=proj
     )
-    ax.add_patch(rect)
-    ax.axis(image_bounds)
     ax.set_aspect("equal")
 
+    # Optional: set extent if you want to zoom in
+    # ax.set_extent([bathy.lon.min(), bathy.lon.max(), bathy.lat.min(), bathy.lat.max()], crs=proj)
+
+    plt.show()
 
 def plot_cases_grid(
     data: xr.DataArray,
