@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 import shutil
 
-def download_buoy_data(buoy_id, year):
+def download_bulk_parameters(buoy_id, year):
     """
     Download data for a specific buoy and year, handling different formats:
     - Pre-1990s: YY MM DD hh (no minutes)
@@ -77,7 +77,7 @@ def download_buoy_data(buoy_id, year):
             
     return None
 
-def process_buoy(buoy_id, start_year=1960, end_year=None):
+def process_buoy(buoy_id, base_dir, start_year=1960, end_year=None):
     """
     Download and combine all available data for a buoy between start_year and end_year
     """
@@ -93,7 +93,7 @@ def process_buoy(buoy_id, start_year=1960, end_year=None):
     os.makedirs(buoy_dir, exist_ok=True)
     
     for year in range(start_year, end_year + 1):
-        df = download_buoy_data(buoy_id, year)
+        df = download_bulk_parameters(buoy_id, year)
         
         if df is not None:
             all_data.append(df)
