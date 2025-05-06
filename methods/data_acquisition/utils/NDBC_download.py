@@ -109,7 +109,7 @@ def process_buoy(buoy_id, base_dir, start_year=1960, end_year=None):
         combined_df = combined_df.sort_values(['YYYY', 'MM', 'DD', 'hh'])
         
         # Save to CSV in the buoy's directory
-        output_file = os.path.join(buoy_dir, f"buoy_{buoy_id}_combined.csv")
+        output_file = os.path.join(buoy_dir, f"buoy_{buoy_id}_bulk_parameters.csv")
         combined_df.to_csv(output_file, index=False)
         print(f"\nData saved to {output_file}")
         return combined_df
@@ -117,14 +117,20 @@ def process_buoy(buoy_id, base_dir, start_year=1960, end_year=None):
         print(f"No data found for buoy {buoy_id}")
         return None
     
-def download_wave_spectra(buoy_id, years, base_dir):
+def download_wave_spectra(buoy_id, base_dir, start_year=1970, end_year=None):
     """
     Download wave spectra data for a specific buoy, saving each year separately
     """
-    buoy_dir = os.path.join(base_dir, buoy_id)
+    os.makedirs(base_dir, exist_ok=True)
+    
+    # Create directory for specific buoy if it doesn't exist
+    buoy_dir = os.path.join(base_dir, buoy_id, 'wave_spectra')
     os.makedirs(buoy_dir, exist_ok=True)
     
-    for year in years:
+    if end_year is None:
+        end_year = datetime.now().year
+    
+    for year in range(start_year, end_year + 1):
         url = f"https://www.ndbc.noaa.gov/data/historical/swden/{buoy_id}w{year}.txt.gz"
         
         try:
@@ -171,7 +177,7 @@ def download_wave_spectra(buoy_id, years, base_dir):
             print(f"No data found for: {buoy_id} - {year}")
             continue
 
-def download_buoy_data(buoy_id, years, base_dir):
+def download_directional_spectra(buoy_id, years, base_dir):
     """
     Download directional wave spectra data for specified buoy and years.
     
