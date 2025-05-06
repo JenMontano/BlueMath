@@ -1,4 +1,3 @@
-%matplotlib inline
 import requests
 import gzip
 import io
@@ -14,11 +13,11 @@ TICK_LABEL_SIZE = 16
 LEGEND_SIZE = 12
 TEXT_SIZE = 14
 
-def plot_wvht_timeseries(buoy_id, base_dir,colors):
+def plot_wvht_timeseries(buoy_id, base_dir):
     """
     Create an enhanced time series plot of wave parameters with three subplots using dots
     """
-    
+    colors = ['plum']
     buoy_dir = os.path.join(base_dir, buoy_id)
     data_file = os.path.join(buoy_dir, f"buoy_{buoy_id}_combined.csv")
     
@@ -124,7 +123,8 @@ def plot_wvht_timeseries(buoy_id, base_dir,colors):
     # Save the plot
     plot_file = os.path.join(buoy_dir, f"buoy_{buoy_id}_wave_parameters.png")
     plt.savefig(plot_file, dpi=300, bbox_inches='tight')
-    # plt.close(
+    plt.show()
+
     
 def plot_multiple_buoys_wvht(buoy_ids, colors=None):
     """
@@ -140,7 +140,6 @@ def plot_multiple_buoys_wvht(buoy_ids, colors=None):
     
     # First, load all the data
     for buoy_id in buoy_ids:
-        base_dir = "/Users/jenmontano/Duke/data/buoys"
         buoy_dir = os.path.join(base_dir, buoy_id)
         data_file = os.path.join(buoy_dir, f"buoy_{buoy_id}_combined.csv")
         
