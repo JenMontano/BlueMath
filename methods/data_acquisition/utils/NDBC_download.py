@@ -8,6 +8,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 from pathlib import Path
 import shutil
+import logging
 
 def download_bulk_parameters(buoy_id, year):
     """
@@ -55,7 +56,7 @@ def download_bulk_parameters(buoy_id, year):
                             data.append(' '.join(parts))
                 
                 # Read the modified data
-                df = pd.read_csv(io.StringIO('\n'.join(data)), sep='\s+',
+                df = pd.read_csv(io.StringIO('\n'.join(data)), sep=r'\s+',
                             names=['YYYY', 'MM', 'DD', 'hh', 'mm', 'WD', 'WSPD', 'GST', 'WVHT', 
                                   'DPD', 'APD', 'MWD', 'BAR', 'ATMP', 'WTMP', 'DEWP', 
                                   'VIS', 'TIDE'])
@@ -135,7 +136,7 @@ def download_wave_spectra(buoy_id, base_dir, start_year=1970, end_year=None):
         
         try:
             # Read the data
-            df = pd.read_csv(url, compression='gzip', sep='\s+',
+            df = pd.read_csv(url, compression='gzip', sep=r'\s+',
                            na_values=['MM', '99.00', '999.0'])
             
             # Skip if empty or invalid data
@@ -177,7 +178,7 @@ def download_wave_spectra(buoy_id, base_dir, start_year=1970, end_year=None):
             print(f"No data found for: {buoy_id} - {year}")
             continue
 
-def download_directional_spectra(buoy_id, years, base_dir):
+def download_directional_spectra(buoy_id, base_dir, start_year, end_year=None):
     """
     Download directional wave spectra data for specified buoy and years.
     
@@ -188,7 +189,7 @@ def download_directional_spectra(buoy_id, years, base_dir):
     years : list
         List of years to download data for
     base_dir : str or Path
-        Base directory for buoy data ('/Users/jenmontano/Duke/data/buoys')
+        Base directory for buoy data 
     """
  
     
@@ -225,7 +226,10 @@ def download_directional_spectra(buoy_id, years, base_dir):
     dir_spectra_dir = buoy_dir / 'directional_spectra'
     dir_spectra_dir.mkdir(parents=True, exist_ok=True)
     
-    for year in years:
+    if end_year is None:
+        end_year = datetime.now().year
+    
+    for year in range(start_year, end_year + 1):
         for coef, info in coefficients.items():
             # Construct filename and URL
             filename = f"{buoy_id}{coef}{year}.txt.gz"
@@ -288,56 +292,925 @@ def calculate_directional_spectrum(C11, freq, alpha1, alpha2, r1, r2):
     return E.T, freq_mesh.T, angle_mesh.T
 
 def read_directional_file(file_path):
-    with gzip.open(file_path, 'rt') as f:
-        header = f.readline().strip()
-        freqs = [float(x) for x in header.split()[5:]]
-        
-        data, dates = [], []
-        for line in f:
+    """Read directional spectra file and return DataFrame with datetime index and frequency columns"""
+    logging.info(f"Reading file: {file_path}")
+    try:
+        with gzip.open(file_path, 'rt') as f:
+            # Read header lines until we find the frequencies
+            header_lines = []
+            while True:
+                line = f.readline().strip()
+                if not line.startswith('#'):
+                    break
+                header_lines.append(line)
+            
+            # Combine header lines and parse frequencies
+            header = ' '.join(header_lines)
+            try:
+                # Skip the first 5 columns (YY MM DD hh mm)
+                freqs = [float(x) for x in header.split()[5:]]
+                logging.info(f"Found {len(freqs)} frequencies")
+            except (ValueError, IndexError) as e:
+                logging.error(f"Error parsing frequencies: {e}")
+                return pd.DataFrame()
+            
+            # Read data
+            data = []
+            dates = []
+            # Process the first line (which was read in the header loop)
             parts = line.strip().split()
             if len(parts) >= 5:
-                year, month, day, hour, minute = map(int, parts[:5])
-                values = [float(x) for x in parts[5:]]
-                if len(values) == len(freqs):
-                    dates.append(datetime(year, month, day, hour, minute))
-                    data.append(values)
-    
-    return pd.DataFrame(data, index=dates, columns=freqs)
+                try:
+                    year, month, day, hour, minute = map(int, parts[:5])
+                    values = [float(x) for x in parts[5:]]
+                    if len(values) == len(freqs):
+                        dates.append(datetime(year, month, day, hour, minute))
+                        data.append(values)
+                except (ValueError, IndexError) as e:
+                    logging.error(f"Error parsing line: {e}")
+            
+            # Read remaining lines
+            for line in f:
+                parts = line.strip().split()
+                if len(parts) >= 5:
+                    try:
+                        year, month, day, hour, minute = map(int, parts[:5])
+                        values = [float(x) for x in parts[5:]]
+                        if len(values) == len(freqs):
+                            dates.append(datetime(year, month, day, hour, minute))
+                            data.append(values)
+                    except (ValueError, IndexError) as e:
+                        logging.error(f"Error parsing line: {e}")
+                        continue
+            
+            if not data:
+                logging.warning("No valid data points found in file")
+                return pd.DataFrame()
+            
+            df = pd.DataFrame(data, index=dates, columns=freqs)
+            logging.info(f"Created DataFrame with shape: {df.shape}")
+            return df
+            
+    except Exception as e:
+        logging.error(f"Error reading file {file_path}: {str(e)}")
+        return pd.DataFrame()
 
 def read_spectra_file(file_path):
-    with gzip.open(file_path, 'rt') as f:
-        header = f.readline().strip()
-        freqs = [float(x) for x in header.split()[5:]]
-        
-        data, dates = [], []
-        for line in f:
+    """Read the C11 spectra file"""
+    logging.info(f"Reading file: {file_path}")
+    try:
+        with gzip.open(file_path, 'rt') as f:
+            # Read header lines until we find the frequencies
+            header_lines = []
+            while True:
+                line = f.readline().strip()
+                if not line.startswith('#'):
+                    break
+                header_lines.append(line)
+            
+            # Combine header lines and parse frequencies
+            header = ' '.join(header_lines)
+            try:
+                # Skip the first 5 columns (YY MM DD hh mm)
+                freqs = [float(x) for x in header.split()[5:]]
+                logging.info(f"Found {len(freqs)} frequencies")
+            except (ValueError, IndexError) as e:
+                logging.error(f"Error parsing frequencies: {e}")
+                return pd.DataFrame()
+            
+            # Read data
+            data = []
+            dates = []
+            # Process the first line (which was read in the header loop)
             parts = line.strip().split()
             if len(parts) >= 5:
-                year, month, day, hour, minute = map(int, parts[:5])
-                values = [float(x) for x in parts[5:]]
-                if len(values) == len(freqs):
-                    dates.append(datetime(year, month, day, hour, minute))
-                    data.append(values)
-    
-    return pd.DataFrame(data, index=dates, columns=freqs)
+                try:
+                    year, month, day, hour, minute = map(int, parts[:5])
+                    values = [float(x) for x in parts[5:]]
+                    if len(values) == len(freqs):
+                        dates.append(datetime(year, month, day, hour, minute))
+                        data.append(values)
+                except (ValueError, IndexError) as e:
+                    logging.error(f"Error parsing line: {e}")
+            
+            # Read remaining lines
+            for line in f:
+                parts = line.strip().split()
+                if len(parts) >= 5:
+                    try:
+                        year, month, day, hour, minute = map(int, parts[:5])
+                        values = [float(x) for x in parts[5:]]
+                        if len(values) == len(freqs):
+                            dates.append(datetime(year, month, day, hour, minute))
+                            data.append(values)
+                    except (ValueError, IndexError) as e:
+                        logging.error(f"Error parsing line: {e}")
+                        continue
+            
+            if not data:
+                logging.warning("No valid data points found in file")
+                return pd.DataFrame()
+            
+            df = pd.DataFrame(data, index=dates, columns=freqs)
+            logging.info(f"Created DataFrame with shape: {df.shape}")
+            return df
+            
+    except Exception as e:
+        logging.error(f"Error reading file {file_path}: {str(e)}")
+        return pd.DataFrame()
 
 def get_season(month):
+    """Return season based on month"""
     return {12: 'DJF', 1: 'DJF', 2: 'DJF',
             3: 'MAM', 4: 'MAM', 5: 'MAM',
             6: 'JJA', 7: 'JJA', 8: 'JJA',
             9: 'SON', 10: 'SON', 11: 'SON'}[month]
 
-def calculate_averages(df):
-    # Convert all columns to numeric, coercing errors to NaN
-    numeric_df = df.apply(pd.to_numeric, errors='coerce')
-    # Add season column back
-    numeric_df['season'] = df.index.month.map(get_season)
+def process_year(buoy_id, year, base_dir):
+    """
+    Process a single year of data for a specific buoy
+    """
+    logging.info(f"Processing buoy {buoy_id} for year {year}")
     
-    # Calculate monthly average
-    monthly_avg = numeric_df.drop('season', axis=1).groupby(numeric_df.index.month).mean()
-    # Calculate seasonal average
-    seasonal_avg = numeric_df.drop('season', axis=1).groupby(numeric_df['season']).mean()
-    # Calculate annual average
-    annual_avg = numeric_df.drop('season', axis=1).mean()
+    # Convert base_dir to Path if it's a string
+    base_dir = Path(base_dir)
     
-    return monthly_avg, seasonal_avg, annual_avg
+    # First, download the directional spectra data
+    download_directional_spectra(buoy_id, base_dir, year, year)
+    
+    # Create paths for this year's files
+    dir_spectra_dir = base_dir / buoy_id / 'directional_spectra'
+    alpha1_path = dir_spectra_dir / f'{buoy_id}d{year}.txt.gz'
+    alpha2_path = dir_spectra_dir / f'{buoy_id}i{year}.txt.gz'
+    r1_path = dir_spectra_dir / f'{buoy_id}j{year}.txt.gz'
+    r2_path = dir_spectra_dir / f'{buoy_id}k{year}.txt.gz'
+    c11_path = dir_spectra_dir / f'{buoy_id}w{year}.txt.gz'
+    
+    # Check if all required files exist
+    required_files = [alpha1_path, alpha2_path, r1_path, r2_path, c11_path]
+    missing_files = [f for f in required_files if not f.exists()]
+    
+    if missing_files:
+        logging.warning(f"Missing files for {buoy_id} {year}: {[f.name for f in missing_files]}")
+        return None
+    
+    try:
+        # Read all data files
+        alpha1_df = read_directional_file(alpha1_path)
+        alpha2_df = read_directional_file(alpha2_path)
+        r1_df = read_directional_file(r1_path)
+        r2_df = read_directional_file(r2_path)
+        c11_df = read_spectra_file(c11_path)
+        
+        if any(df.empty for df in [alpha1_df, alpha2_df, r1_df, r2_df, c11_df]):
+            logging.error(f"Failed to read one or more data files for {buoy_id} {year}")
+            return None
+        
+        # Convert all dataframes to numeric
+        r1_df = r1_df.apply(pd.to_numeric, errors='coerce')
+        r2_df = r2_df.apply(pd.to_numeric, errors='coerce')
+        alpha1_df = alpha1_df.apply(pd.to_numeric, errors='coerce')
+        alpha2_df = alpha2_df.apply(pd.to_numeric, errors='coerce')
+        c11_df = c11_df.apply(pd.to_numeric, errors='coerce')
+        
+        # Get frequencies from the columns
+        freqs = np.array([float(col) for col in r1_df.columns])
+        
+        # Create output directory
+        output_dir = base_dir / buoy_id /'processed' / str(year)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Process monthly data
+        for month in range(1, 13):
+            try:
+                # Get monthly averages
+                r1_monthly = r1_df.groupby(r1_df.index.month).mean().loc[month].values
+                r2_monthly = r2_df.groupby(r2_df.index.month).mean().loc[month].values
+                alpha1_monthly = alpha1_df.groupby(alpha1_df.index.month).mean().loc[month].values
+                alpha2_monthly = alpha2_df.groupby(alpha2_df.index.month).mean().loc[month].values
+                c11_monthly = c11_df.groupby(c11_df.index.month).mean().loc[month].values
+                
+                # Calculate directional spectrum
+                E, freq_mesh, angle_mesh = calculate_directional_spectrum(
+                    c11_monthly, freqs, alpha1_monthly, alpha2_monthly, r1_monthly, r2_monthly
+                )
+                
+                # Plot and save
+                plt.figure(figsize=(10, 8))
+                ax = plt.subplot(111, projection='polar')
+                pcm = ax.pcolormesh(angle_mesh, freq_mesh, E, cmap='magma')
+                ax.set_theta_direction(-1)
+                ax.set_theta_zero_location('N')
+                plt.colorbar(pcm, label='Energy Density (m²/Hz/rad)')
+                plt.title(f'Directional Spectrum - Month {month} - {buoy_id} {year}')
+                plt.savefig(output_dir / f'directional_spectrum_month_{month}.png')
+                plt.close()
+                
+            except KeyError:
+                logging.warning(f"No data available for month {month}")
+                continue
+        
+        # Process seasonal data
+        seasons = ['DJF', 'MAM', 'JJA', 'SON']
+        for season in seasons:
+            try:
+                # Get seasonal averages
+                r1_seasonal = r1_df.groupby(r1_df.index.month.map(get_season)).mean().loc[season].values
+                r2_seasonal = r2_df.groupby(r2_df.index.month.map(get_season)).mean().loc[season].values
+                alpha1_seasonal = alpha1_df.groupby(alpha1_df.index.month.map(get_season)).mean().loc[season].values
+                alpha2_seasonal = alpha2_df.groupby(alpha2_df.index.month.map(get_season)).mean().loc[season].values
+                c11_seasonal = c11_df.groupby(c11_df.index.month.map(get_season)).mean().loc[season].values
+                
+                # Calculate directional spectrum
+                E, freq_mesh, angle_mesh = calculate_directional_spectrum(
+                    c11_seasonal, freqs, alpha1_seasonal, alpha2_seasonal, r1_seasonal, r2_seasonal
+                )
+                
+                # Plot and save
+                plt.figure(figsize=(10, 8))
+                ax = plt.subplot(111, projection='polar')
+                pcm = ax.pcolormesh(angle_mesh, freq_mesh, E, cmap='magma')
+                ax.set_theta_direction(-1)
+                ax.set_theta_zero_location('N')
+                plt.colorbar(pcm, label='Energy Density (m²/Hz/rad)')
+                plt.title(f'Directional Spectrum - {season} - {buoy_id} {year}')
+                plt.savefig(output_dir / f'directional_spectrum_{season.lower()}.png')
+                plt.close()
+                
+            except KeyError:
+                logging.warning(f"No data available for season {season}")
+                continue
+        
+        # Process annual data
+        r1_annual = r1_df.mean().values
+        r2_annual = r2_df.mean().values
+        alpha1_annual = alpha1_df.mean().values
+        alpha2_annual = alpha2_df.mean().values
+        c11_annual = c11_df.mean().values
+        
+        E, freq_mesh, angle_mesh = calculate_directional_spectrum(
+            c11_annual, freqs, alpha1_annual, alpha2_annual, r1_annual, r2_annual
+        )
+        
+        plt.figure(figsize=(10, 8))
+        ax = plt.subplot(111, projection='polar')
+        pcm = ax.pcolormesh(angle_mesh, freq_mesh, E, cmap='magma')
+        ax.set_theta_direction(-1)
+        ax.set_theta_zero_location('N')
+        plt.colorbar(pcm, label='Energy Density (m²/Hz/rad)')
+        plt.title(f'Directional Spectrum - Annual - {buoy_id} {year}')
+        plt.savefig(output_dir / 'directional_spectrum_annual.png')
+        plt.close()
+        
+        logging.info(f"Successfully processed {buoy_id} {year}")
+        return True
+        
+    except Exception as e:
+        logging.error(f"Error processing {buoy_id} {year}: {str(e)}")
+        return None
+
+
+def plot_date_range(alpha1_df, alpha2_df, r1_df, r2_df, c11_df, buoy_id, start_date, end_date, base_dir):
+    """
+    Plot directional spectra for a date range
+    
+    Parameters:
+    -----------
+    alpha1_df, alpha2_df, r1_df, r2_df, c11_df : pandas.DataFrame
+        DataFrames containing the processed data
+    buoy_id : str
+        Buoy identifier
+    start_date : str
+        Start date in format 'YYYY-MM-DD HH:MM'
+    end_date : str
+        End date in format 'YYYY-MM-DD HH:MM'
+    base_dir : str or Path
+        Base directory for data storage
+    """
+    # Convert base_dir to Path if it's a string
+    base_dir = Path(base_dir)
+    
+    # Convert dates to datetime objects
+    start_dt = pd.to_datetime(start_date)
+    end_dt = pd.to_datetime(end_date)
+    
+    # Get frequencies from the columns
+    freqs = np.array([float(col) for col in r1_df.columns])
+    
+    # Create output directory
+    output_dir = base_dir / buoy_id / 'processed' / f"{start_dt.strftime('%Y%m%d')}_{end_dt.strftime('%Y%m%d')}"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Process monthly data
+    plt.figure(figsize=(20, 15))
+    for month in range(1, 13):
+        try:
+            # Get monthly averages
+            r1_monthly = r1_df.groupby(r1_df.index.month).mean().loc[month].values
+            r2_monthly = r2_df.groupby(r2_df.index.month).mean().loc[month].values
+            alpha1_monthly = alpha1_df.groupby(alpha1_df.index.month).mean().loc[month].values
+            alpha2_monthly = alpha2_df.groupby(alpha2_df.index.month).mean().loc[month].values
+            c11_monthly = c11_df.groupby(c11_df.index.month).mean().loc[month].values
+            
+            # Calculate directional spectrum
+            E, freq_mesh, angle_mesh = calculate_directional_spectrum(
+                c11_monthly, freqs, alpha1_monthly, alpha2_monthly, r1_monthly, r2_monthly
+            )
+            
+            # Plot
+            ax = plt.subplot(4, 3, month, projection='polar')
+            pcm = ax.pcolormesh(angle_mesh, freq_mesh, E, cmap='magma')
+            ax.set_theta_direction(-1)
+            ax.set_theta_zero_location('N')
+            plt.title(f'Month {month}')
+            
+        except KeyError:
+            logging.warning(f"No data available for month {month}")
+            continue
+    
+    plt.suptitle(f'Monthly Directional Spectra - {buoy_id} ({start_dt.strftime("%Y-%m-%d")} to {end_dt.strftime("%Y-%m-%d")})')
+    plt.tight_layout()
+    plt.savefig(output_dir / 'monthly_directional_spectra.png')
+    plt.close()
+    
+    # Process seasonal data
+    plt.figure(figsize=(20, 15))
+    seasons = ['DJF', 'MAM', 'JJA', 'SON']
+    for i, season in enumerate(seasons, 1):
+        try:
+            # Get seasonal averages
+            r1_seasonal = r1_df.groupby(r1_df.index.month.map(get_season)).mean().loc[season].values
+            r2_seasonal = r2_df.groupby(r2_df.index.month.map(get_season)).mean().loc[season].values
+            alpha1_seasonal = alpha1_df.groupby(alpha1_df.index.month.map(get_season)).mean().loc[season].values
+            alpha2_seasonal = alpha2_df.groupby(alpha2_df.index.month.map(get_season)).mean().loc[season].values
+            c11_seasonal = c11_df.groupby(c11_df.index.month.map(get_season)).mean().loc[season].values
+            
+            # Calculate directional spectrum
+            E, freq_mesh, angle_mesh = calculate_directional_spectrum(
+                c11_seasonal, freqs, alpha1_seasonal, alpha2_seasonal, r1_seasonal, r2_seasonal
+            )
+            
+            # Plot
+            ax = plt.subplot(2, 2, i, projection='polar')
+            pcm = ax.pcolormesh(angle_mesh, freq_mesh, E, cmap='magma')
+            ax.set_theta_direction(-1)
+            ax.set_theta_zero_location('N')
+            plt.title(f'Season {season}')
+            
+        except KeyError:
+            logging.warning(f"No data available for season {season}")
+            continue
+    
+    plt.suptitle(f'Seasonal Directional Spectra - {buoy_id} ({start_dt.strftime("%Y-%m-%d")} to {end_dt.strftime("%Y-%m-%d")})')
+    plt.tight_layout()
+    plt.savefig(output_dir / 'seasonal_directional_spectra.png')
+    plt.close()
+    
+    # Process annual data
+    r1_annual = r1_df.mean().values
+    r2_annual = r2_df.mean().values
+    alpha1_annual = alpha1_df.mean().values
+    alpha2_annual = alpha2_df.mean().values
+    c11_annual = c11_df.mean().values
+    
+    E, freq_mesh, angle_mesh = calculate_directional_spectrum(
+        c11_annual, freqs, alpha1_annual, alpha2_annual, r1_annual, r2_annual
+    )
+    
+    plt.figure(figsize=(10, 8))
+    ax = plt.subplot(111, projection='polar')
+    pcm = ax.pcolormesh(angle_mesh, freq_mesh, E, cmap='magma')
+    ax.set_theta_direction(-1)
+    ax.set_theta_zero_location('N')
+    plt.colorbar(pcm, label='Energy Density (m²/Hz/rad)')
+    plt.title(f'Annual Directional Spectrum - {buoy_id} ({start_dt.strftime("%Y-%m-%d")} to {end_dt.strftime("%Y-%m-%d")})')
+    plt.savefig(output_dir / 'annual_directional_spectrum.png')
+    plt.close()
+
+def download_and_process_specific_date(buoy_id, date_str, base_dir):
+    """
+    Download and process data for a specific date
+    
+    Parameters:
+    -----------
+    buoy_id : str
+        Buoy identifier
+    date_str : str
+        Date in format 'YYYY-MM-DD HH:MM'
+    base_dir : str or Path
+        Base directory for data storage
+    
+    Returns:
+    --------
+    tuple
+        (alpha1, alpha2, r1, r2, c11, freqs) if successful, None if failed
+    """
+    logging.info(f"Downloading and processing data for buoy {buoy_id} at {date_str}")
+    
+    # Convert base_dir to Path if it's a string
+    base_dir = Path(base_dir)
+    
+    # Convert date to datetime
+    target_date = pd.to_datetime(date_str)
+    
+    # Download data for the year
+    download_directional_spectra(buoy_id, base_dir, target_date.year, target_date.year)
+    
+    # Create paths for files
+    dir_spectra_dir = base_dir / buoy_id / 'directional_spectra'
+    alpha1_path = dir_spectra_dir / f'{buoy_id}d{target_date.year}.txt.gz'
+    alpha2_path = dir_spectra_dir / f'{buoy_id}i{target_date.year}.txt.gz'
+    r1_path = dir_spectra_dir / f'{buoy_id}j{target_date.year}.txt.gz'
+    r2_path = dir_spectra_dir / f'{buoy_id}k{target_date.year}.txt.gz'
+    c11_path = dir_spectra_dir / f'{buoy_id}w{target_date.year}.txt.gz'
+    
+    # Read files
+    alpha1_df = read_directional_file(alpha1_path)
+    alpha2_df = read_directional_file(alpha2_path)
+    r1_df = read_directional_file(r1_path)
+    r2_df = read_directional_file(r2_path)
+    c11_df = read_spectra_file(c11_path)
+    
+    if any(df.empty for df in [alpha1_df, alpha2_df, r1_df, r2_df, c11_df]):
+        logging.error(f"Failed to read one or more data files for {buoy_id} {target_date.year}")
+        return None
+    
+    # Get data for the specific date
+    try:
+        alpha1 = alpha1_df.loc[target_date].values
+        alpha2 = alpha2_df.loc[target_date].values
+        r1 = r1_df.loc[target_date].values
+        r2 = r2_df.loc[target_date].values
+        c11 = c11_df.loc[target_date].values
+        freqs = np.array([float(col) for col in r1_df.columns])
+    except KeyError:
+        logging.error(f"No data available for {buoy_id} at {date_str}")
+        return None
+    
+    return alpha1, alpha2, r1, r2, c11, freqs
+
+def plot_specific_date(alpha1, alpha2, r1, r2, c11, freqs, buoy_id, date_str, base_dir):
+    """
+    Plot directional spectrum for a specific date
+    
+    Parameters:
+    -----------
+    alpha1, alpha2, r1, r2, c11 : numpy.ndarray
+        Arrays containing the processed data
+    freqs : numpy.ndarray
+        Array of frequencies
+    buoy_id : str
+        Buoy identifier
+    date_str : str
+        Date in format 'YYYY-MM-DD HH:MM'
+    base_dir : str or Path
+        Base directory for data storage
+    """
+    # Convert base_dir to Path if it's a string
+    base_dir = Path(base_dir)
+    
+    # Convert date to datetime
+    target_date = pd.to_datetime(date_str)
+    
+    # Calculate directional spectrum
+    E, freq_mesh, angle_mesh = calculate_directional_spectrum(
+        c11, freqs, alpha1, alpha2, r1, r2
+    )
+    
+    # Create output directory
+    output_dir = base_dir / buoy_id / 'processed' / 'specific_dates'
+    output_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Plot
+    plt.figure(figsize=(10, 8))
+    ax = plt.subplot(111, projection='polar')
+    pcm = ax.pcolormesh(angle_mesh, freq_mesh, E, cmap='magma')
+    ax.set_theta_direction(-1)
+    ax.set_theta_zero_location('N')
+    plt.colorbar(pcm, label='Energy Density (m²/Hz/rad)')
+    plt.title(f'Directional Spectrum - {buoy_id} at {date_str}')
+    plt.savefig(output_dir / f'directional_spectrum_{target_date.strftime("%Y%m%d_%H%M")}.png')
+    plt.close()
+
+def plot_monthly_directional_spectra(alpha1_df, alpha2_df, r1_df, r2_df, c11_df, buoy_id, start_date, end_date, base_dir):
+    """
+    Create a single plot with 12 subplots showing monthly directional spectra
+    
+    Parameters:
+    -----------
+    alpha1_df, alpha2_df, r1_df, r2_df, c11_df : pandas.DataFrame
+        DataFrames containing the processed data
+    buoy_id : str
+        Buoy identifier
+    start_date : str
+        Start date in format 'YYYY-MM-DD HH:MM'
+    end_date : str
+        End date in format 'YYYY-MM-DD HH:MM'
+    base_dir : str or Path
+        Base directory for data storage
+    """
+    # Convert base_dir to Path if it's a string
+    base_dir = Path(base_dir)
+    
+    # Convert dates to datetime objects
+    start_dt = pd.to_datetime(start_date)
+    end_dt = pd.to_datetime(end_date)
+    
+    # Get frequencies from the columns
+    freqs = np.array([float(col) for col in r1_df.columns])
+    
+    # Create output directory
+    output_dir = base_dir / buoy_id / 'processed' / f"{start_dt.strftime('%Y%m%d')}_{end_dt.strftime('%Y%m%d')}"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Process monthly data
+    plt.figure(figsize=(20, 15))
+    for month in range(1, 13):
+        try:
+            # Get monthly averages
+            r1_monthly = r1_df.groupby(r1_df.index.month).mean().loc[month].values
+            r2_monthly = r2_df.groupby(r2_df.index.month).mean().loc[month].values
+            alpha1_monthly = alpha1_df.groupby(alpha1_df.index.month).mean().loc[month].values
+            alpha2_monthly = alpha2_df.groupby(alpha2_df.index.month).mean().loc[month].values
+            c11_monthly = c11_df.groupby(c11_df.index.month).mean().loc[month].values
+            
+            # Calculate directional spectrum
+            E, freq_mesh, angle_mesh = calculate_directional_spectrum(
+                c11_monthly, freqs, alpha1_monthly, alpha2_monthly, r1_monthly, r2_monthly
+            )
+            
+            # Plot
+            ax = plt.subplot(4, 3, month, projection='polar')
+            pcm = ax.pcolormesh(angle_mesh, freq_mesh, E, cmap='magma')
+            ax.set_theta_direction(-1)
+            ax.set_theta_zero_location('N')
+            plt.title(f'Month {month}')
+            
+        except KeyError:
+            logging.warning(f"No data available for month {month}")
+            continue
+    
+    plt.suptitle(f'Monthly Directional Spectra - {buoy_id} ({start_dt.strftime("%Y-%m-%d")} to {end_dt.strftime("%Y-%m-%d")})')
+    plt.tight_layout()
+    plt.savefig(output_dir / 'monthly_directional_spectra.png')
+    plt.close()
+
+def plot_seasonal_directional_spectra(alpha1_df, alpha2_df, r1_df, r2_df, c11_df, buoy_id, start_date, end_date, base_dir):
+    """
+    Create a single plot with 4 subplots showing seasonal directional spectra
+    
+    Parameters:
+    -----------
+    alpha1_df, alpha2_df, r1_df, r2_df, c11_df : pandas.DataFrame
+        DataFrames containing the processed data
+    buoy_id : str
+        Buoy identifier
+    start_date : str
+        Start date in format 'YYYY-MM-DD HH:MM'
+    end_date : str
+        End date in format 'YYYY-MM-DD HH:MM'
+    base_dir : str or Path
+        Base directory for data storage
+    """
+    # Convert base_dir to Path if it's a string
+    base_dir = Path(base_dir)
+    
+    # Convert dates to datetime objects
+    start_dt = pd.to_datetime(start_date)
+    end_dt = pd.to_datetime(end_date)
+    
+    # Get frequencies from the columns
+    freqs = np.array([float(col) for col in r1_df.columns])
+    
+    # Create output directory
+    output_dir = base_dir / buoy_id / 'processed' / f"{start_dt.strftime('%Y%m%d')}_{end_dt.strftime('%Y%m%d')}"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Process seasonal data
+    plt.figure(figsize=(20, 15))
+    seasons = ['DJF', 'MAM', 'JJA', 'SON']
+    for i, season in enumerate(seasons, 1):
+        try:
+            # Get seasonal averages
+            r1_seasonal = r1_df.groupby(r1_df.index.month.map(get_season)).mean().loc[season].values
+            r2_seasonal = r2_df.groupby(r2_df.index.month.map(get_season)).mean().loc[season].values
+            alpha1_seasonal = alpha1_df.groupby(alpha1_df.index.month.map(get_season)).mean().loc[season].values
+            alpha2_seasonal = alpha2_df.groupby(alpha2_df.index.month.map(get_season)).mean().loc[season].values
+            c11_seasonal = c11_df.groupby(c11_df.index.month.map(get_season)).mean().loc[season].values
+            
+            # Calculate directional spectrum
+            E, freq_mesh, angle_mesh = calculate_directional_spectrum(
+                c11_seasonal, freqs, alpha1_seasonal, alpha2_seasonal, r1_seasonal, r2_seasonal
+            )
+            
+            # Plot
+            ax = plt.subplot(2, 2, i, projection='polar')
+            pcm = ax.pcolormesh(angle_mesh, freq_mesh, E, cmap='magma')
+            ax.set_theta_direction(-1)
+            ax.set_theta_zero_location('N')
+            plt.title(f'Season {season}')
+            
+        except KeyError:
+            logging.warning(f"No data available for season {season}")
+            continue
+    
+    plt.suptitle(f'Seasonal Directional Spectra - {buoy_id} ({start_dt.strftime("%Y-%m-%d")} to {end_dt.strftime("%Y-%m-%d")})')
+    plt.tight_layout()
+    plt.savefig(output_dir / 'seasonal_directional_spectra.png')
+    plt.close()
+
+def plot_annual_directional_spectrum(alpha1_df, alpha2_df, r1_df, r2_df, c11_df, buoy_id, start_date, end_date, base_dir):
+    """
+    Create a single plot showing annual directional spectrum
+    
+    Parameters:
+    -----------
+    alpha1_df, alpha2_df, r1_df, r2_df, c11_df : pandas.DataFrame
+        DataFrames containing the processed data
+    buoy_id : str
+        Buoy identifier
+    start_date : str
+        Start date in format 'YYYY-MM-DD HH:MM'
+    end_date : str
+        End date in format 'YYYY-MM-DD HH:MM'
+    base_dir : str or Path
+        Base directory for data storage
+    """
+    # Convert base_dir to Path if it's a string
+    base_dir = Path(base_dir)
+    
+    # Convert dates to datetime objects
+    start_dt = pd.to_datetime(start_date)
+    end_dt = pd.to_datetime(end_date)
+    
+    # Get frequencies from the columns
+    freqs = np.array([float(col) for col in r1_df.columns])
+    
+    # Create output directory
+    output_dir = base_dir / buoy_id / 'processed' / f"{start_dt.strftime('%Y%m%d')}_{end_dt.strftime('%Y%m%d')}"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Process annual data
+    r1_annual = r1_df.mean().values
+    r2_annual = r2_df.mean().values
+    alpha1_annual = alpha1_df.mean().values
+    alpha2_annual = alpha2_df.mean().values
+    c11_annual = c11_df.mean().values
+    
+    E, freq_mesh, angle_mesh = calculate_directional_spectrum(
+        c11_annual, freqs, alpha1_annual, alpha2_annual, r1_annual, r2_annual
+    )
+    
+    plt.figure(figsize=(10, 8))
+    ax = plt.subplot(111, projection='polar')
+    pcm = ax.pcolormesh(angle_mesh, freq_mesh, E, cmap='magma')
+    ax.set_theta_direction(-1)
+    ax.set_theta_zero_location('N')
+    plt.colorbar(pcm, label='Energy Density (m²/Hz/rad)')
+    plt.title(f'Annual Directional Spectrum - {buoy_id} ({start_dt.strftime("%Y-%m-%d")} to {end_dt.strftime("%Y-%m-%d")})')
+    plt.savefig(output_dir / 'annual_directional_spectrum.png')
+    plt.close()
+
+def plot_specific_date_directional_spectrum(alpha1, alpha2, r1, r2, c11, freqs, buoy_id, date_str, base_dir):
+    """
+    Create a single plot showing directional spectrum for a specific date
+    
+    Parameters:
+    -----------
+    alpha1, alpha2, r1, r2, c11 : numpy.ndarray
+        Arrays containing the processed data
+    freqs : numpy.ndarray
+        Array of frequencies
+    buoy_id : str
+        Buoy identifier
+    date_str : str
+        Date in format 'YYYY-MM-DD HH:MM'
+    base_dir : str or Path
+        Base directory for data storage
+    """
+    # Convert base_dir to Path if it's a string
+    base_dir = Path(base_dir)
+    
+    # Convert date to datetime
+    target_date = pd.to_datetime(date_str)
+    
+    # Calculate directional spectrum
+    E, freq_mesh, angle_mesh = calculate_directional_spectrum(
+        c11, freqs, alpha1, alpha2, r1, r2
+    )
+    
+    # Create output directory
+    output_dir = base_dir / buoy_id / 'processed' / 'specific_dates'
+    output_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Plot
+    plt.figure(figsize=(10, 8))
+    ax = plt.subplot(111, projection='polar')
+    pcm = ax.pcolormesh(angle_mesh, freq_mesh, E, cmap='magma')
+    ax.set_theta_direction(-1)
+    ax.set_theta_zero_location('N')
+    plt.colorbar(pcm, label='Energy Density (m²/Hz/rad)')
+    plt.title(f'Directional Spectrum - {buoy_id} at {date_str}')
+    plt.savefig(output_dir / f'directional_spectrum_{target_date.strftime("%Y%m%d_%H%M")}.png')
+    plt.close()
+
+def read_and_process_data(buoy_id, start_date, end_date, base_dir):
+    """
+    Read and process data for a date range
+    
+    Parameters:
+    -----------
+    buoy_id : str
+        Buoy identifier
+    start_date : str
+        Start date in format 'YYYY-MM-DD HH:MM'
+    end_date : str
+        End date in format 'YYYY-MM-DD HH:MM'
+    base_dir : str or Path
+        Base directory for data storage
+    
+    Returns:
+    --------
+    tuple
+        (alpha1_df, alpha2_df, r1_df, r2_df, c11_df) if successful, None if failed
+    """
+    # Convert base_dir to Path if it's a string
+    base_dir = Path(base_dir)
+    
+    # Convert dates to datetime objects
+    start_dt = pd.to_datetime(start_date)
+    end_dt = pd.to_datetime(end_date)
+    
+    # Get all years in the range
+    years = range(start_dt.year, end_dt.year + 1)
+    
+    # Read all data files
+    all_alpha1 = []
+    all_alpha2 = []
+    all_r1 = []
+    all_r2 = []
+    all_c11 = []
+    
+    for year in years:
+        dir_spectra_dir = base_dir / buoy_id / 'directional_spectra'
+        alpha1_path = dir_spectra_dir / f'{buoy_id}d{year}.txt.gz'
+        alpha2_path = dir_spectra_dir / f'{buoy_id}i{year}.txt.gz'
+        r1_path = dir_spectra_dir / f'{buoy_id}j{year}.txt.gz'
+        r2_path = dir_spectra_dir / f'{buoy_id}k{year}.txt.gz'
+        c11_path = dir_spectra_dir / f'{buoy_id}w{year}.txt.gz'
+        
+        # Read files
+        alpha1_df = read_directional_file(alpha1_path)
+        alpha2_df = read_directional_file(alpha2_path)
+        r1_df = read_directional_file(r1_path)
+        r2_df = read_directional_file(r2_path)
+        c11_df = read_spectra_file(c11_path)
+        
+        if not any(df.empty for df in [alpha1_df, alpha2_df, r1_df, r2_df, c11_df]):
+            all_alpha1.append(alpha1_df)
+            all_alpha2.append(alpha2_df)
+            all_r1.append(r1_df)
+            all_r2.append(r2_df)
+            all_c11.append(c11_df)
+    
+    if not all_alpha1:
+        logging.error("No valid data found for the specified date range")
+        return None
+    
+    # Combine all years
+    alpha1_df = pd.concat(all_alpha1)
+    alpha2_df = pd.concat(all_alpha2)
+    r1_df = pd.concat(all_r1)
+    r2_df = pd.concat(all_r2)
+    c11_df = pd.concat(all_c11)
+    
+    # Filter by date range
+    mask = (alpha1_df.index >= start_dt) & (alpha1_df.index <= end_dt)
+    alpha1_df = alpha1_df[mask]
+    alpha2_df = alpha2_df[mask]
+    r1_df = r1_df[mask]
+    r2_df = r2_df[mask]
+    c11_df = c11_df[mask]
+    
+    # Convert all dataframes to numeric
+    r1_df = r1_df.apply(pd.to_numeric, errors='coerce')
+    r2_df = r2_df.apply(pd.to_numeric, errors='coerce')
+    alpha1_df = alpha1_df.apply(pd.to_numeric, errors='coerce')
+    alpha2_df = alpha2_df.apply(pd.to_numeric, errors='coerce')
+    c11_df = c11_df.apply(pd.to_numeric, errors='coerce')
+    
+    return alpha1_df, alpha2_df, r1_df, r2_df, c11_df
+
+def read_and_process_specific_date(buoy_id, date_str, base_dir):
+    """
+    Read and process data for a specific date
+    
+    Parameters:
+    -----------
+    buoy_id : str
+        Buoy identifier
+    date_str : str
+        Date in format 'YYYY-MM-DD HH:MM'
+    base_dir : str or Path
+        Base directory for data storage
+    
+    Returns:
+    --------
+    tuple
+        (alpha1, alpha2, r1, r2, c11, freqs) if successful, None if failed
+    """
+    # Convert base_dir to Path if it's a string
+    base_dir = Path(base_dir)
+    
+    # Convert date to datetime
+    target_date = pd.to_datetime(date_str)
+    
+    # Create paths for files
+    dir_spectra_dir = base_dir / buoy_id / 'directional_spectra'
+    alpha1_path = dir_spectra_dir / f'{buoy_id}d{target_date.year}.txt.gz'
+    alpha2_path = dir_spectra_dir / f'{buoy_id}i{target_date.year}.txt.gz'
+    r1_path = dir_spectra_dir / f'{buoy_id}j{target_date.year}.txt.gz'
+    r2_path = dir_spectra_dir / f'{buoy_id}k{target_date.year}.txt.gz'
+    c11_path = dir_spectra_dir / f'{buoy_id}w{target_date.year}.txt.gz'
+    
+    # Read files
+    alpha1_df = read_directional_file(alpha1_path)
+    alpha2_df = read_directional_file(alpha2_path)
+    r1_df = read_directional_file(r1_path)
+    r2_df = read_directional_file(r2_path)
+    c11_df = read_spectra_file(c11_path)
+    
+    if any(df.empty for df in [alpha1_df, alpha2_df, r1_df, r2_df, c11_df]):
+        logging.error(f"Failed to read one or more data files for {buoy_id} {target_date.year}")
+        return None
+    
+    # Get data for the specific date
+    try:
+        alpha1 = alpha1_df.loc[target_date].values
+        alpha2 = alpha2_df.loc[target_date].values
+        r1 = r1_df.loc[target_date].values
+        r2 = r2_df.loc[target_date].values
+        c11 = c11_df.loc[target_date].values
+        freqs = np.array([float(col) for col in r1_df.columns])
+    except KeyError:
+        logging.error(f"No data available for {buoy_id} at {date_str}")
+        return None
+    
+    return alpha1, alpha2, r1, r2, c11, freqs
+
+def read_specific_date_data(buoy_id, date_str, base_dir):
+    """
+    Read data for a specific date from existing downloaded files
+    
+    Parameters:
+    -----------
+    buoy_id : str
+        Buoy identifier
+    date_str : str
+        Date in format 'YYYY-MM-DD HH:MM'
+    base_dir : str or Path
+        Base directory where data files are stored
+    
+    Returns:
+    --------
+    tuple
+        (alpha1, alpha2, r1, r2, c11, freqs) if successful, None if failed
+    """
+    # Convert base_dir to Path if it's a string
+    base_dir = Path(base_dir)
+    
+    # Convert date to datetime
+    target_date = pd.to_datetime(date_str)
+    
+    # Create paths for files
+    dir_spectra_dir = base_dir / buoy_id / 'directional_spectra'
+    alpha1_path = dir_spectra_dir / f'{buoy_id}d{target_date.year}.txt.gz'
+    alpha2_path = dir_spectra_dir / f'{buoy_id}i{target_date.year}.txt.gz'
+    r1_path = dir_spectra_dir / f'{buoy_id}j{target_date.year}.txt.gz'
+    r2_path = dir_spectra_dir / f'{buoy_id}k{target_date.year}.txt.gz'
+    c11_path = dir_spectra_dir / f'{buoy_id}w{target_date.year}.txt.gz'
+    
+    # Read files
+    alpha1_df = read_directional_file(alpha1_path)
+    alpha2_df = read_directional_file(alpha2_path)
+    r1_df = read_directional_file(r1_path)
+    r2_df = read_directional_file(r2_path)
+    c11_df = read_spectra_file(c11_path)
+    
+    if any(df.empty for df in [alpha1_df, alpha2_df, r1_df, r2_df, c11_df]):
+        logging.error(f"Failed to read one or more data files for {buoy_id} {target_date.year}")
+        return None
+    
+    # Get data for the specific date
+    try:
+        alpha1 = alpha1_df.loc[target_date].values
+        alpha2 = alpha2_df.loc[target_date].values
+        r1 = r1_df.loc[target_date].values
+        r2 = r2_df.loc[target_date].values
+        c11 = c11_df.loc[target_date].values
+        freqs = np.array([float(col) for col in r1_df.columns])
+    except KeyError:
+        logging.error(f"No data available for {buoy_id} at {date_str}")
+        return None
+    
+    return alpha1, alpha2, r1, r2, c11, freqs

@@ -6,6 +6,7 @@ from datetime import datetime
 import os
 import numpy as np
 import matplotlib.pyplot as plt
+from pathlib import Path
 # Set font sizes
 TITLE_SIZE = 20
 AXIS_LABEL_SIZE = 18
@@ -125,7 +126,7 @@ def plot_wvht_timeseries(buoy_id, base_dir):
     plt.savefig(plot_file, dpi=300, bbox_inches='tight')
     plt.show()
 
-def plot_yearly_averages(buoy_id, years, base_dir):
+def plot_yearly_averages(buoy_id, base_dir, start_year, end_year=None):
     """
     Plot yearly wave spectra averages with overall average
     """
@@ -139,9 +140,11 @@ def plot_yearly_averages(buoy_id, years, base_dir):
     yearly_averages = []
     valid_years = []
     
-    # Process each year
-    for year in years:
-        file_path = os.path.join(base_dir, buoy_id, f"buoy_{buoy_id}_spectra_{year}.csv")
+    if end_year is None:
+        end_year = datetime.now().year
+    
+    for year in range(start_year, end_year + 1):
+        file_path = os.path.join(base_dir, buoy_id, 'wave_spectra', f"buoy_{buoy_id}_spectra_{year}.csv")
         
         try:
             # Read data
@@ -208,7 +211,7 @@ def plot_yearly_averages(buoy_id, years, base_dir):
     plt.tight_layout()
     return fig
 
-def plot_seasonal_averages(buoy_id, years, base_dir):
+def plot_seasonal_averages(buoy_id, base_dir, start_year, end_year=None):
     """
     Plot seasonal averages with interpolation to handle different frequency grids
     Using only numpy for interpolation
@@ -230,9 +233,11 @@ def plot_seasonal_averages(buoy_id, years, base_dir):
     # Keep track of all interpolated averages for each season
     all_averages = {season: [] for season in seasons.keys()}
     
-    # Process each year
-    for year in years:
-        file_path = os.path.join(base_dir, buoy_id, f"buoy_{buoy_id}_spectra_{year}.csv")
+    if end_year is None:
+        end_year = datetime.now().year
+    
+    for year in range(start_year, end_year + 1):
+        file_path = os.path.join(base_dir, buoy_id,'wave_spectra', f"buoy_{buoy_id}_spectra_{year}.csv")
         
         try:
             # Read data
@@ -296,11 +301,12 @@ def plot_seasonal_averages(buoy_id, years, base_dir):
     
     plt.suptitle(f'Seasonal Wave Spectra - Buoy {buoy_id}', fontsize=TITLE_SIZE, y=1.02)
     plt.tight_layout()
+    plt.show()
     
     return fig
 
 
-def plot_monthly_averages(buoy_id, years, base_dir):
+def plot_monthly_averages(buoy_id, base_dir, start_year, end_year=None):
     """
     Plot monthly wave spectra averages across all years
     """
@@ -321,9 +327,13 @@ def plot_monthly_averages(buoy_id, years, base_dir):
     # Keep track of all interpolated averages for each month
     all_averages = {month+1: [] for month in range(12)}
     
+    if end_year is None:
+      end_year = datetime.now().year
+    
+   
     # Process each year
-    for year in years:
-        file_path = os.path.join(base_dir, buoy_id, f"buoy_{buoy_id}_spectra_{year}.csv")
+    for year in range(start_year, end_year + 1):
+        file_path = os.path.join(base_dir, buoy_id,'wave_spectra', f"buoy_{buoy_id}_spectra_{year}.csv")
         
         try:
             # Read data
@@ -400,6 +410,237 @@ def plot_monthly_averages(buoy_id, years, base_dir):
     
     plt.suptitle(f'Monthly Wave Spectra Averages - Buoy {buoy_id}', y=1.02, fontsize=TITLE_SIZE)
     plt.tight_layout()
+    plt.show()
     
     return fig
 
+
+
+
+
+
+def calculate_directional_spectrum(C11, freq, alpha1, alpha2, r1, r2):
+    """
+    Calculate normalized directional wave spectrum.
+    """
+    # Create angle array (0 to 360 degrees)
+    angles = np.linspace(0, 2*np.pi, 360)
+    
+    # Create meshgrid for frequency and direction
+    angle_mesh, freq_mesh = np.meshgrid(angles, freq)
+    
+    # Convert angles to radians
+    alpha1_rad = np.deg2rad(alpha1)
+    alpha2_rad = np.deg2rad(alpha2)
+    
+    # Convert r1 and r2 from percentages to decimals
+    r1 = np.array(r1) / 100
+    r2 = np.array(r2) / 100
+
+    # Initialize spectrum array
+    E = np.zeros((len(freq), len(angles)))
+    
+    # Calculate directional spectrum for each frequency
+    for i in range(len(freq)):
+        # Compute spreading function D(f,θ)
+        D = (1 / np.pi) * (0.5 + r1[i] * np.cos(angles - alpha1_rad[i]) + r2[i] * np.cos(2 * (angles - alpha2_rad[i])))
+        
+        # Normalize so it integrates to 1
+        D = D / np.trapz(D, angles)
+        
+        # Ensure non-negative values
+        D[D < 0] = 0
+        
+        # Calculate full directional spectrum
+        E[i, :] = C11[i] * D
+    
+    return E.T, freq_mesh.T, angle_mesh.T
+
+def get_season(month):
+    """Return season based on month"""
+    return {12: 'DJF', 1: 'DJF', 2: 'DJF',
+            3: 'MAM', 4: 'MAM', 5: 'MAM',
+            6: 'JJA', 7: 'JJA', 8: 'JJA',
+            9: 'SON', 10: 'SON', 11: 'SON'}[month]
+
+def plot_specific_date_directional_spectrum(alpha1, alpha2, r1, r2, c11, freqs, buoy_id, date_str, base_dir):
+    """
+    Create a single plot showing directional spectrum for a specific date
+    """
+    # Convert base_dir to Path if it's a string
+    base_dir = Path(base_dir)
+    
+    # Convert date to datetime
+    target_date = pd.to_datetime(date_str)
+    
+    # Calculate directional spectrum
+    E, freq_mesh, angle_mesh = calculate_directional_spectrum(
+        c11, freqs, alpha1, alpha2, r1, r2
+    )
+    
+    # Create Figures directory
+    output_dir = base_dir / buoy_id / 'Figures'
+    output_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Plot
+    plt.figure(figsize=(10, 8))
+    ax = plt.subplot(111, projection='polar')
+    pcm = ax.pcolormesh(angle_mesh, freq_mesh, E, cmap='magma')
+    ax.set_theta_direction(-1)
+    ax.set_theta_zero_location('N')
+    plt.colorbar(pcm, label='Energy Density (m²/Hz/rad)')
+    plt.title(f'Directional Spectrum - {buoy_id} at {date_str}')
+    
+    # Save the plot with date in filename
+    plt.savefig(output_dir / f'directional_spectrum_{target_date.strftime("%Y%m%d_%H%M")}.png')
+    plt.show()
+    plt.close()
+
+def plot_monthly_directional_spectra(alpha1_df, alpha2_df, r1_df, r2_df, c11_df, buoy_id, start_date, end_date, base_dir):
+    """
+    Create a single plot with 12 subplots showing monthly directional spectra
+    """
+    # Convert base_dir to Path if it's a string
+    base_dir = Path(base_dir)
+    
+    # Convert dates to datetime objects
+    start_dt = pd.to_datetime(start_date)
+    end_dt = pd.to_datetime(end_date)
+    
+    # Get frequencies from the columns
+    freqs = np.array([float(col) for col in r1_df.columns])
+    
+    # Create Figures directory
+    output_dir = base_dir / buoy_id / 'Figures'
+    output_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Process monthly data
+    plt.figure(figsize=(20, 15))
+    for month in range(1, 13):
+        try:
+            # Get monthly averages
+            r1_monthly = r1_df.groupby(r1_df.index.month).mean().loc[month].values
+            r2_monthly = r2_df.groupby(r2_df.index.month).mean().loc[month].values
+            alpha1_monthly = alpha1_df.groupby(alpha1_df.index.month).mean().loc[month].values
+            alpha2_monthly = alpha2_df.groupby(alpha2_df.index.month).mean().loc[month].values
+            c11_monthly = c11_df.groupby(c11_df.index.month).mean().loc[month].values
+            
+            # Calculate directional spectrum
+            E, freq_mesh, angle_mesh = calculate_directional_spectrum(
+                c11_monthly, freqs, alpha1_monthly, alpha2_monthly, r1_monthly, r2_monthly
+            )
+            
+            # Plot
+            ax = plt.subplot(4, 3, month, projection='polar')
+            pcm = ax.pcolormesh(angle_mesh, freq_mesh, E, cmap='magma')
+            ax.set_theta_direction(-1)
+            ax.set_theta_zero_location('N')
+            plt.title(f'Month {month}')
+            
+        except KeyError:
+            logging.warning(f"No data available for month {month}")
+            continue
+    
+    plt.suptitle(f'Monthly Directional Spectra - {buoy_id} ({start_dt.strftime("%Y-%m-%d")} to {end_dt.strftime("%Y-%m-%d")})')
+    plt.tight_layout()
+    
+    # Save the plot with date range in filename
+    plt.savefig(output_dir / f'monthly_directional_spectra_{start_dt.strftime("%Y%m%d")}_{end_dt.strftime("%Y%m%d")}.png')
+    plt.show()
+    plt.close()
+
+def plot_seasonal_directional_spectra(alpha1_df, alpha2_df, r1_df, r2_df, c11_df, buoy_id, start_date, end_date, base_dir):
+    """
+    Create a single plot with 4 subplots showing seasonal directional spectra
+    """
+    # Convert base_dir to Path if it's a string
+    base_dir = Path(base_dir)
+    
+    # Convert dates to datetime objects
+    start_dt = pd.to_datetime(start_date)
+    end_dt = pd.to_datetime(end_date)
+    
+    # Get frequencies from the columns
+    freqs = np.array([float(col) for col in r1_df.columns])
+    
+    # Create Figures directory
+    output_dir = base_dir / buoy_id / 'Figures'
+    output_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Process seasonal data
+    plt.figure(figsize=(20, 15))
+    seasons = ['DJF', 'MAM', 'JJA', 'SON']
+    for i, season in enumerate(seasons, 1):
+        try:
+            # Get seasonal averages
+            r1_seasonal = r1_df.groupby(r1_df.index.month.map(get_season)).mean().loc[season].values
+            r2_seasonal = r2_df.groupby(r2_df.index.month.map(get_season)).mean().loc[season].values
+            alpha1_seasonal = alpha1_df.groupby(alpha1_df.index.month.map(get_season)).mean().loc[season].values
+            alpha2_seasonal = alpha2_df.groupby(alpha2_df.index.month.map(get_season)).mean().loc[season].values
+            c11_seasonal = c11_df.groupby(c11_df.index.month.map(get_season)).mean().loc[season].values
+            
+            # Calculate directional spectrum
+            E, freq_mesh, angle_mesh = calculate_directional_spectrum(
+                c11_seasonal, freqs, alpha1_seasonal, alpha2_seasonal, r1_seasonal, r2_seasonal
+            )
+            
+            # Plot
+            ax = plt.subplot(2, 2, i, projection='polar')
+            pcm = ax.pcolormesh(angle_mesh, freq_mesh, E, cmap='magma')
+            ax.set_theta_direction(-1)
+            ax.set_theta_zero_location('N')
+            plt.title(f'Season {season}')
+            
+        except KeyError:
+            logging.warning(f"No data available for season {season}")
+            continue
+    
+    plt.suptitle(f'Seasonal Directional Spectra - {buoy_id} ({start_dt.strftime("%Y-%m-%d")} to {end_dt.strftime("%Y-%m-%d")})')
+    plt.tight_layout()
+    
+    # Save the plot with date range in filename
+    plt.savefig(output_dir / f'seasonal_directional_spectra_{start_dt.strftime("%Y%m%d")}_{end_dt.strftime("%Y%m%d")}.png')
+    plt.show()
+    plt.close()
+
+def plot_annual_directional_spectrum(alpha1_df, alpha2_df, r1_df, r2_df, c11_df, buoy_id, start_date, end_date, base_dir):
+    """
+    Create a single plot showing annual directional spectrum
+    """
+    # Convert base_dir to Path if it's a string
+    base_dir = Path(base_dir)
+    
+    # Convert dates to datetime objects
+    start_dt = pd.to_datetime(start_date)
+    end_dt = pd.to_datetime(end_date)
+    
+    # Get frequencies from the columns
+    freqs = np.array([float(col) for col in r1_df.columns])
+    
+    # Create Figures directory
+    output_dir = base_dir / buoy_id / 'Figures'
+    output_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Process annual data
+    r1_annual = r1_df.mean().values
+    r2_annual = r2_df.mean().values
+    alpha1_annual = alpha1_df.mean().values
+    alpha2_annual = alpha2_df.mean().values
+    c11_annual = c11_df.mean().values
+    
+    E, freq_mesh, angle_mesh = calculate_directional_spectrum(
+        c11_annual, freqs, alpha1_annual, alpha2_annual, r1_annual, r2_annual
+    )
+    
+    plt.figure(figsize=(10, 8))
+    ax = plt.subplot(111, projection='polar')
+    pcm = ax.pcolormesh(angle_mesh, freq_mesh, E, cmap='magma')
+    ax.set_theta_direction(-1)
+    ax.set_theta_zero_location('N')
+    plt.colorbar(pcm, label='Energy Density (m²/Hz/rad)')
+    plt.title(f'Annual Directional Spectrum - {buoy_id} ({start_dt.strftime("%Y-%m-%d")} to {end_dt.strftime("%Y-%m-%d")})')
+    
+    # Save the plot with date range in filename
+    plt.savefig(output_dir / f'annual_directional_spectrum_{start_dt.strftime("%Y%m%d")}_{end_dt.strftime("%Y%m%d")}.png')
+    plt.show()
+    plt.close()
