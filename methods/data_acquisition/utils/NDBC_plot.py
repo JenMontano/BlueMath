@@ -1,12 +1,10 @@
-import requests
-import gzip
-import io
 import pandas as pd
 from datetime import datetime
 import os
 import numpy as np
 import matplotlib.pyplot as plt
 from pathlib import Path
+from utils.NDBC_download import calculate_directional_spectrum
 # Set font sizes
 TITLE_SIZE = 20
 AXIS_LABEL_SIZE = 18
@@ -14,7 +12,7 @@ TICK_LABEL_SIZE = 16
 LEGEND_SIZE = 12
 TEXT_SIZE = 14
 
-def plot_wvht_timeseries(buoy_id, base_dir):
+def plot_bulk_timeseries(buoy_id, base_dir):
     """
     Create an enhanced time series plot of wave parameters with three subplots using dots
     """
@@ -65,8 +63,6 @@ def plot_wvht_timeseries(buoy_id, base_dir):
     # Plot 2: Wave Periods
     valid_dpd = ~pd.isna(df['DPD'])
     valid_apd = ~pd.isna(df['APD'])
-    # ax2.plot(df.loc[valid_dpd, 'datetime'], df.loc[valid_dpd, 'DPD'], 
-    #          'r.', markersize=1, label='Dominant Period')
     ax2.plot(df.loc[valid_apd, 'datetime'], df.loc[valid_apd, 'APD'], 
             color= colors[0], markersize=1, label='Average Period')
     ax2.set_ylabel('Wave Period (s)', fontsize=AXIS_LABEL_SIZE)
@@ -121,9 +117,10 @@ def plot_wvht_timeseries(buoy_id, base_dir):
     # Adjust layout
     plt.tight_layout()
     
-    # Save the plot
-    plot_file = os.path.join(buoy_dir, f"buoy_{buoy_id}_wave_parameters.png")
-    plt.savefig(plot_file, dpi=300, bbox_inches='tight')
+    # Create Figures directory and save the plot
+    output_dir = Path(base_dir) / buoy_id / 'Figures'
+    output_dir.mkdir(parents=True, exist_ok=True)
+    plt.savefig(output_dir / f"buoy_{buoy_id}_wave_parameters.png", dpi=300, bbox_inches='tight')
     plt.show()
 
 def plot_yearly_averages(buoy_id, base_dir, start_year, end_year=None):
@@ -172,16 +169,12 @@ def plot_yearly_averages(buoy_id, base_dir, start_year, end_year=None):
                 
                 # Store for overall average
                 yearly_averages.append(interp_avg)
-                valid_years.append(year) 
-                # print(f"Processed year {year}")
+                valid_years.append(year)
                 
             except AttributeError as e:
-                # print(f"Error processing year {year}")
-                # print(f"Index type: {type(df.index)}")
                 continue
             
         except (FileNotFoundError, ValueError) as e:
-            # print(f"Error with year {year}")
             continue
     
     # Plot overall average if we have data
@@ -209,6 +202,12 @@ def plot_yearly_averages(buoy_id, base_dir, start_year, end_year=None):
         ax.legend(fontsize=12)
     
     plt.tight_layout()
+
+    # Create Figures directory and save the plot
+    output_dir = Path(base_dir) / buoy_id / 'Figures'
+    output_dir.mkdir(parents=True, exist_ok=True)
+    plt.savefig(output_dir / f"yearly_spectra_{buoy_id}_{start_year}_{end_year}.png", dpi=300, bbox_inches='tight')
+    plt.show()
     return fig
 
 def plot_seasonal_averages(buoy_id, base_dir, start_year, end_year=None):
@@ -274,10 +273,7 @@ def plot_seasonal_averages(buoy_id, base_dir, start_year, end_year=None):
                     print(f"Index type: {type(df.index)}")
                     continue
             
-            # print(f"Processed year {year}")
-            
         except (FileNotFoundError, ValueError) as e:
-            # print(f"Error with year {year}")
             continue
     
     # Plot overall averages for each season
@@ -294,17 +290,20 @@ def plot_seasonal_averages(buoy_id, base_dir, start_year, end_year=None):
             # Customize plot
             info['ax'].set_title(season, fontsize=13)
             info['ax'].set_xlabel('Frequency (Hz)', fontsize=AXIS_LABEL_SIZE)
-            info['ax'].set_ylabel('Spectral Density (m²/Hz)', fontsize=AXIS_LABEL_SIZE      )
+            info['ax'].set_ylabel('Spectral Density (m²/Hz)', fontsize=AXIS_LABEL_SIZE)
             info['ax'].grid(True, alpha=0.2)
             info['ax'].legend(fontsize=LEGEND_SIZE)
             info['ax'].tick_params(axis='both', labelsize=TICK_LABEL_SIZE)
     
-    plt.suptitle(f'Seasonal Wave Spectra - Buoy {buoy_id}', fontsize=TITLE_SIZE, y=1.02)
+    plt.suptitle(f'Seasonal Wave Spectra - Buoy {buoy_id} ({start_year} to {end_year})', fontsize=TITLE_SIZE, y=1.02)
     plt.tight_layout()
-    plt.show()
     
+    # Create Figures directory and save the plot
+    output_dir = Path(base_dir) / buoy_id / 'Figures'
+    output_dir.mkdir(parents=True, exist_ok=True)
+    plt.savefig(output_dir / f"seasonal_spectra_{buoy_id}_{start_year}_{end_year}.png", dpi=300, bbox_inches='tight')
+    plt.show()
     return fig
-
 
 def plot_monthly_averages(buoy_id, base_dir, start_year, end_year=None):
     """
@@ -328,9 +327,8 @@ def plot_monthly_averages(buoy_id, base_dir, start_year, end_year=None):
     all_averages = {month+1: [] for month in range(12)}
     
     if end_year is None:
-      end_year = datetime.now().year
+        end_year = datetime.now().year
     
-   
     # Process each year
     for year in range(start_year, end_year + 1):
         file_path = os.path.join(base_dir, buoy_id,'wave_spectra', f"buoy_{buoy_id}_spectra_{year}.csv")
@@ -370,10 +368,7 @@ def plot_monthly_averages(buoy_id, base_dir, start_year, end_year=None):
                     print(f"Index type: {type(df.index)}")
                     continue
             
-            # print(f"Processed year {year}")
-            
         except (FileNotFoundError, ValueError) as e:
-            # print(f"Error with year {year}: {e}")
             continue
     
     # Find the global maximum value for consistent y-axis
@@ -408,18 +403,17 @@ def plot_monthly_averages(buoy_id, base_dir, start_year, end_year=None):
             # Set consistent y-axis limits
             axes[month-1].set_ylim(0, y_max)
     
-    plt.suptitle(f'Monthly Wave Spectra Averages - Buoy {buoy_id}', y=1.02, fontsize=TITLE_SIZE)
+    plt.suptitle(f'Monthly Wave Spectra Averages - Buoy {buoy_id} ({start_year} to {end_year})', y=1.02, fontsize=TITLE_SIZE)
     plt.tight_layout()
-    plt.show()
     
+    # Create Figures directory and save the plot
+    output_dir = Path(base_dir) / buoy_id / 'Figures'
+    output_dir.mkdir(parents=True, exist_ok=True)
+    plt.savefig(output_dir / f"monthly_spectra_{buoy_id}_{start_year}_{end_year}.png", dpi=300, bbox_inches='tight')
+    plt.show()
     return fig
 
-
-
-
-
-
-def calculate_directional_spectrum(C11, freq, alpha1, alpha2, r1, r2):
+# def calculate_directional_spectrum(C11, freq, alpha1, alpha2, r1, r2):
     """
     Calculate normalized directional wave spectrum.
     """
@@ -494,7 +488,6 @@ def plot_specific_date_directional_spectrum(alpha1, alpha2, r1, r2, c11, freqs, 
     # Save the plot with date in filename
     plt.savefig(output_dir / f'directional_spectrum_{target_date.strftime("%Y%m%d_%H%M")}.png')
     plt.show()
-    plt.close()
 
 def plot_monthly_directional_spectra(alpha1_df, alpha2_df, r1_df, r2_df, c11_df, buoy_id, start_date, end_date, base_dir):
     """
@@ -547,7 +540,6 @@ def plot_monthly_directional_spectra(alpha1_df, alpha2_df, r1_df, r2_df, c11_df,
     # Save the plot with date range in filename
     plt.savefig(output_dir / f'monthly_directional_spectra_{start_dt.strftime("%Y%m%d")}_{end_dt.strftime("%Y%m%d")}.png')
     plt.show()
-    plt.close()
 
 def plot_seasonal_directional_spectra(alpha1_df, alpha2_df, r1_df, r2_df, c11_df, buoy_id, start_date, end_date, base_dir):
     """
@@ -601,9 +593,8 @@ def plot_seasonal_directional_spectra(alpha1_df, alpha2_df, r1_df, r2_df, c11_df
     # Save the plot with date range in filename
     plt.savefig(output_dir / f'seasonal_directional_spectra_{start_dt.strftime("%Y%m%d")}_{end_dt.strftime("%Y%m%d")}.png')
     plt.show()
-    plt.close()
 
-def plot_annual_directional_spectrum(alpha1_df, alpha2_df, r1_df, r2_df, c11_df, buoy_id, start_date, end_date, base_dir):
+def plot_average_directional_spectrum(alpha1_df, alpha2_df, r1_df, r2_df, c11_df, buoy_id, start_date, end_date, base_dir):
     """
     Create a single plot showing annual directional spectrum
     """
@@ -638,9 +629,8 @@ def plot_annual_directional_spectrum(alpha1_df, alpha2_df, r1_df, r2_df, c11_df,
     ax.set_theta_direction(-1)
     ax.set_theta_zero_location('N')
     plt.colorbar(pcm, label='Energy Density (m²/Hz/rad)')
-    plt.title(f'Annual Directional Spectrum - {buoy_id} ({start_dt.strftime("%Y-%m-%d")} to {end_dt.strftime("%Y-%m-%d")})')
+    plt.title(f'Average Directional Spectrum - {buoy_id} ({start_dt.strftime("%Y-%m-%d")} to {end_dt.strftime("%Y-%m-%d")})')
     
     # Save the plot with date range in filename
-    plt.savefig(output_dir / f'annual_directional_spectrum_{start_dt.strftime("%Y%m%d")}_{end_dt.strftime("%Y%m%d")}.png')
+    plt.savefig(output_dir / f'average_directional_spectrum_{start_dt.strftime("%Y%m%d")}_{end_dt.strftime("%Y%m%d")}.png')
     plt.show()
-    plt.close()
