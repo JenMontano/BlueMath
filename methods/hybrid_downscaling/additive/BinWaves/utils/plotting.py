@@ -98,26 +98,26 @@ def plot_selected_bathy(bathy: xr.DataArray, utm_zone=18):
     ax.add_feature(cfeature.COASTLINE, linewidth=1.5, zorder=20)
 
     # Rectangle and annotation
-    rect = Rectangle(
-        (bathy.lon.min(), bathy.lat.min()),
-        bathy.lon.max() - bathy.lon.min(),
-        bathy.lat.max() - bathy.lat.min(),
-        linewidth=3,
-        edgecolor="orange",
-        facecolor="none",
-        zorder=15,
-        transform=proj
-    )
-    ax.add_patch(rect)
-    ax.annotate(
-        "Bathymetry Area",
-        xy=(bathy.lon.max(), bathy.lat.max() - 5000),
-        xytext=(bathy.lon.max() + 2500, bathy.lat.max() - 10000),
-        arrowprops=dict(color="orange", arrowstyle="->"),
-        fontsize=10,
-        color="orange",
-        transform=proj
-    )
+    # rect = Rectangle(
+    #     (bathy.lon.min(), bathy.lat.min()),
+    #     bathy.lon.max() - bathy.lon.min(),
+    #     bathy.lat.max() - bathy.lat.min(),
+    #     linewidth=3,
+    #     edgecolor="orange",
+    #     facecolor="none",
+    #     zorder=15,
+    #     transform=proj
+    # )
+    # ax.add_patch(rect)
+    # ax.annotate(
+    #     "Bathymetry Area",
+    #     xy=(bathy.lon.max(), bathy.lat.max() - 5000),
+    #     xytext=(bathy.lon.max() + 2500, bathy.lat.max() - 10000),
+    #     arrowprops=dict(color="orange", arrowstyle="->"),
+    #     fontsize=10,
+    #     color="orange",
+    #     transform=proj
+    # )
     ax.set_aspect("equal")
 
     # Optional: set extent if you want to zoom in
