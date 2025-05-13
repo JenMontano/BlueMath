@@ -79,7 +79,12 @@ def plot_selected_bathy(bathy: xr.DataArray, utm_zone=18):
 
     # Plot bathymetry
     bathy.plot.contourf(
-        ax=ax, levels=[10, 25, 50, 100, 200, 300, 500, 1000], cmap="Blues",
+        ax=ax,
+        x='lon',
+        y='lat',
+        levels=[0, -10, -25, -50, -100, -200, -500, -1000],
+        cmap="Blues_r",
+        add_colorbar=False,
         transform=proj
     )
     grid = ax.pcolor(
@@ -468,25 +473,52 @@ def plot_spectrum_in_coastline(
     offshore_spectra: xr.Dataset,
     time_to_plot: str,
     sites_for_spectrum: list,
-    ortophoto: np.ndarray,
 ):
     """
-    Plot gridded graph!
+    Plot gridded graph with wave spectra at different locations.
+    
+    All coordinates are in UTM Zone 18N (EPSG:32618):
+    - bathy uses 'cx' and 'cy' for UTM coordinates
+    - reconstructed_onshore_spectra uses 'utm_x' and 'utm_y' for UTM coordinates
+    - reconstruction_kps uses 'utm_x' and 'utm_y' for UTM coordinates
+    - offshore_spectra uses 'longitude' and 'latitude' for UTM coordinates (despite the names)
+    
+    Parameters
+    ----------
+    bathy : xr.DataArray
+        Bathymetry data
+    reconstructed_onshore_spectra : xr.Dataset
+        Reconstructed onshore spectra
+    reconstruction_kps : xr.Dataset
+        Reconstruction key points
+    offshore_spectra : xr.Dataset
+        Offshore spectra
+    time_to_plot : str
+        Time to plot in ISO format (e.g., '2009-01-01T00:00:00')
+    sites_for_spectrum : list
+        List of site indices to plot spectra for
     """
 
     fig, ax = plt.subplots(figsize=(15, 6))
 
-    # Plot bathymetry as a countour
+    # Plot bathymetry as a countour (using UTM coordinates cx, cy)
     bathy.plot.contourf(
         ax=ax,
+        x='cx',
+        y='cy',
         levels=[0, -10, -25, -50, -100, -200, -500, -1000],
         cmap="Blues_r",
         add_colorbar=False,
     )
 
-    # Plot reconstructed Hs in grid
+    # Find the closest time index for all datasets
+    time_to_plot_dt = np.datetime64(time_to_plot)
+    reconstructed_time_idx = np.abs(reconstructed_onshore_spectra.time.values - time_to_plot_dt).argmin()
+    offshore_time_idx = np.abs(offshore_spectra.time.values - time_to_plot_dt).argmin()
+
+    # Plot reconstructed Hs in grid (using UTM coordinates utm_x, utm_y)
     hs_map = (
-        reconstructed_onshore_spectra.sel(time=time_to_plot, method="nearest")
+        reconstructed_onshore_spectra.isel(time=reconstructed_time_idx)
         .kp.spec.hs()
         .values
     )
@@ -498,33 +530,19 @@ def plot_spectrum_in_coastline(
     )
     plt.colorbar(phs).set_label("Hs [m]")
 
-    # Plot reconstructed Dir in grid
-    # u_map, v_map = get_uv_components(
-    #     reconstructed_onshore_spectra.sel(time=time_to_plot, method="nearest")
-    #     .kp.spec.dpm()
-    #     .values
-    # )
-    # ax.quiver(
-    #     reconstruction_kps.utm_x.values,
-    #     reconstruction_kps.utm_y.values,
-    #     -u_map.reshape(reconstruction_kps.utm_x.size, reconstruction_kps.utm_y.size).T,
-    #     -v_map.reshape(reconstruction_kps.utm_x.size, reconstruction_kps.utm_y.size).T,
-    #     width=0.002,
-    # )
-
-    # Plot onshore spectra at sites
+    # Plot onshore spectra at sites (using UTM coordinates utm_x, utm_y)
     for site in sites_for_spectrum:
         lon = reconstructed_onshore_spectra.utm_x.values[site]
         lat = reconstructed_onshore_spectra.utm_y.values[site]
         axin = ax.inset_axes(
-            [lon, lat, 10000, 10000], transform=ax.transData, projection="polar"
+            [lon, lat, 55000, 55000], transform=ax.transData, projection="polar"
         )
         ax.scatter(lon, lat, c="black", marker="*", s=500)
         axin.pcolormesh(
             np.deg2rad(reconstructed_onshore_spectra.dir.values),
             reconstructed_onshore_spectra.freq.values,
             np.sqrt(
-                reconstructed_onshore_spectra.sel(time=time_to_plot, method="nearest")
+                reconstructed_onshore_spectra.isel(time=reconstructed_time_idx)
                 .isel(site=site)
                 .kp
             ),
@@ -534,40 +552,33 @@ def plot_spectrum_in_coastline(
         axin.set_theta_direction(-1)
         axin.axis("off")
 
-    # Plot offshore spectrum
+    # Plot offshore spectrum at the actual spectral point location
+    # Note: offshore_spectra uses 'longitude' and 'latitude' names but they are actually UTM coordinates
+    offshore_x = float(np.unique(offshore_spectra.longitude.values)[0])
+    offshore_y = float(np.unique(offshore_spectra.latitude.values)[0])
     axoff = ax.inset_axes(
-        [465000, 4825000, 10000, 10000], transform=ax.transData, projection="polar"
+        [offshore_x, offshore_y, 55000, 55000], 
+        transform=ax.transData, 
+        projection="polar"
     )
+    
     axoff.pcolormesh(
         np.deg2rad(offshore_spectra.dir.values),
         offshore_spectra.freq.values,
-        np.sqrt(offshore_spectra.sel(time=time_to_plot, method="nearest").efth),
+        np.sqrt(offshore_spectra.isel(time=offshore_time_idx).efth),
         cmap=colormap_spectra(),
     )
     axoff.set_theta_zero_location("N", offset=0)
     axoff.set_theta_direction(-1)
     axoff.axis("off")
-    # Add text description in figure
-    ax.text(
-        465000,
-        4823000,
-        "Offshore Spectra",
-        fontsize=12,
-        bbox=dict(facecolor="white"),
-    )
 
-    # Plot ortophoto of Cantabria
-    image_bounds = (
-        410000.0,
-        479197.6875,
-        4802379.0,
-        4837093.5,
+    # Set the plot bounds
+    plot_bounds = (
+        363000.0,    # min easting (slightly less than GEBCO min: 363166.25)
+        546000.0,    # max easting (slightly more than GEBCO max: 545566.25)
+        3873000.0,   # min northing (slightly less than GEBCO min: 3873132.82)
+        4096000.0,   # max northing (slightly more than GEBCO max: 4095832.82)
     )
-    ax.axis(image_bounds)
-    ax.imshow(
-        ortophoto,
-        extent=image_bounds,
-        zorder=10,
-    )
+    ax.axis(plot_bounds)
 
     return fig, ax

@@ -88,15 +88,15 @@ class BinWavesWrapper(SwanModelWrapper):
         depth_array = depth_dataarray.values
         locations_x, locations_y = np.meshgrid(
             depth_dataarray.sel(
-                lon=slice(300000, 500000), lat=slice(3400000, 4100000)
+                lon=slice(363117, 545626), lat=slice(3873157, None)
             ).lon.values,
             depth_dataarray.sel(
-                lon=slice(300000, 500000), lat=slice(3400000, 4100000)
+                lon=slice(363117, 545626), lat=slice(3873157, None)
             ).lat.values
         )
         self.locations = np.column_stack((locations_x.ravel(), locations_y.ravel()))
-        # Add specific buoy location (33.4410°N, -77.7640°W)
-        self.locations = np.vstack((self.locations, [380000, 3700000]))
+        # Add specific buoy location 36.6120N, -74.8390W 
+        self.locations = np.vstack((self.locations, [514397.61, 4051843.74]))
 
         # Print dataset structure for debugging
         print("Dataset coordinates:", depth_dataarray.coords)
