@@ -192,4 +192,8 @@ cython_debug/
 
 # Large output files
 methods/hybrid_downscaling/additive/BinWaves/outputs_all/
+methods/hybrid_downscaling/additive/BinWaves/outputs/
 *.zip
+methods/hybrid_downscaling/additive/BinWaves/outputs_all/ERA5_offshore_spectra.nc
+methods/hybrid_downscaling/additive/BinWaves/outputs_all/kp_coeffs_gridded.nc
+methods/hybrid_downscaling/additive/BinWaves/outputs_all/all_cases_bulk_parameters.nc
