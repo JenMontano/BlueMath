@@ -88,10 +88,10 @@ class BinWavesWrapper(SwanModelWrapper):
         depth_array = depth_dataarray.values
         locations_x, locations_y = np.meshgrid(
             depth_dataarray.sel(
-                lon=slice(363117, 545626), lat=slice(3873157, None)
+                lon=slice(454373, 544488,100), lat=slice(3873157, 4094989, 100)
             ).lon.values,
             depth_dataarray.sel(
-                lon=slice(363117, 545626), lat=slice(3873157, None)
+                lon=slice(454373, 544488,100), lat=slice(3873157, 4094989, 100)
             ).lat.values
         )
         self.locations = np.column_stack((locations_x.ravel(), locations_y.ravel()))
