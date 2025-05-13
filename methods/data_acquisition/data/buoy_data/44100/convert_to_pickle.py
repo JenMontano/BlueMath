@@ -2,26 +2,11 @@ import pandas as pd
 import numpy as np
 
 # Read the CSV file
-input_file = 'buoy_44088_bulk_parameters.csv'
-output_file = 'buoy_44088_bulk_parameters.pkl'
+input_file = 'buoy_44100_bulk_parameters.csv'
+output_file = 'buoy_44100_bulk_parameters.pkl'
 
 # Read the CSV file
 df = pd.read_csv(input_file)
-
-# Debug: print data types and first few rows
-df.info()
-print("\nFirst few rows of the original DataFrame:")
-print(df.head())
-
-# Debug: print last 5 rows of the original DataFrame
-print("\nLast 5 rows of the original DataFrame:")
-print(df.tail())
-
-# Debug: print unique values for relevant columns
-print("\nUnique values in WVHT:", df['WVHT'].unique()[:10])
-print("Unique values in APD:", df['APD'].unique()[:10])
-print("Unique values in DPD:", df['DPD'].unique()[:10])
-print("Unique values in MWD:", df['MWD'].unique()[:10])
 
 # Create datetime index from the time columns
 df['datetime'] = pd.to_datetime({
@@ -31,6 +16,16 @@ df['datetime'] = pd.to_datetime({
     'hour': df['hh'],
     'minute': df['mm']
 })
+
+# Check for duplicate timestamps
+duplicates = df[df.duplicated('datetime', keep=False)]
+if not duplicates.empty:
+    print(f"\nFound {len(duplicates)} duplicate timestamps:")
+    print(duplicates.sort_values('datetime').head())
+    
+    # Keep the first occurrence of each timestamp
+    df = df.drop_duplicates('datetime', keep='first')
+    print(f"\nRemoved duplicates. New shape: {df.shape}")
 
 df = df.set_index('datetime')
 
@@ -46,10 +41,13 @@ new_df['Spr_Buoy'] = np.nan     # Wave spread (filled with NaN)
 
 new_df.index = df.index
 
+# Verify index is unique
+print("\nVerifying index is unique:", new_df.index.is_unique)
+
 # Save to pickle
 new_df.to_pickle(output_file)
 
-print(f"Conversion complete. File saved as {output_file}")
+print(f"\nConversion complete. File saved as {output_file}")
 print("\nFirst few rows of the converted data:")
 print(new_df.head())
 print("\nLast 5 rows of the converted data:")
