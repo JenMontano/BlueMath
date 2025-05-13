@@ -189,3 +189,7 @@ cython_debug/
 
 # MacOS
 *.DS_Store
+
+# Large output files
+methods/hybrid_downscaling/additive/BinWaves/outputs_all/
+*.zip
