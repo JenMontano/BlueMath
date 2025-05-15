@@ -95,9 +95,21 @@ class BinWavesWrapper(SwanModelWrapper):
             ).lat.values
         )
         self.locations = np.column_stack((locations_x.ravel(), locations_y.ravel()))
-        # Add specific buoy location 36.6120N, -74.8390W 
+        # Add specific buoy location 36.6120N, -74.8390W -buoy 44088
         self.locations = np.vstack((self.locations, [514397.61, 4051843.74]))
+        #36.2580, -75.5930 (WGS84) - buoy 44100
+        self.locations = np.vstack((self.locations, [446728.66, 4012728.08]))
+        #36.0010, -75.4210 (WGS84) - buoy 44086
+        self.locations = np.vstack((self.locations, [462056.64, 3984141.31]))
+        # 36.2000, -75.7140 (WGS84) - buoy 44056
+        self.locations = np.vstack((self.locations, [435811.25, 4006367.97]))
+        #35.7500, -75.3300 (WGS84) - buoy 44095
+        self.locations = np.vstack((self.locations, [470164.24, 3956270.58]))
+        #35.0100, -75.4540 (WGS84) - buoy 41025
+        self.locations = np.vstack((self.locations, [458576.64, 3874246.18]))
 
+       
+        
         # Print dataset structure for debugging
         print("Dataset coordinates:", depth_dataarray.coords)
         print("Dataset dimensions:", depth_dataarray.dims)

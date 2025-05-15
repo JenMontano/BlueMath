@@ -70,6 +70,18 @@ def download_bulk_parameters(buoy_id, year):
                 )
                 
                 df = df[valid_dates].copy()
+
+                for col in ['WVHT', 'DPD', 'APD', 'MWD']:
+                    # Replace missing value codes with NaN
+                    df[col] = df[col].replace([99.0, 999.0], np.nan)
+                    
+                    # Wave height and periods should not be 0
+                    if col in ['WVHT', 'DPD', 'APD']:
+                        df[col] = df[col].where(df[col] > 0, np.nan)
+                    
+                    # Periods should not be greater than 30 seconds
+                    if col in ['DPD', 'APD']:
+                        df[col] = df[col].where(df[col] <= 30, np.nan)
                 
                 if len(df) > 0:
                     return df
@@ -849,3 +861,87 @@ def read_specific_date_data(buoy_id, date_str, base_dir):
         return None
     
     return alpha1, alpha2, r1, r2, c11, freqs
+
+import pandas as pd
+import numpy as np
+import argparse
+import os
+
+def convert_to_pickle(input_file, output_file=None):
+    """
+    Convert buoy data from CSV format to pickle format
+    
+    Parameters:
+    -----------
+    input_file : str
+        Path to the input CSV file
+    output_file : str, optional
+        Path to the output pickle file. If not provided, will use the same name as input with .pkl extension
+    """
+    print(f"Processing file: {input_file}")
+    
+    # Set default output file if not provided
+    if output_file is None:
+        output_file = os.path.splitext(input_file)[0] + '.pkl'
+    
+    # Read the CSV file
+    df = pd.read_csv(input_file)
+    
+    # Debug: print data types and first few rows
+    df.info()
+    print("\nFirst few rows of the original DataFrame:")
+    print(df.head())
+    
+    # Debug: print last 5 rows of the original DataFrame
+    print("\nLast 5 rows of the original DataFrame:")
+    print(df.tail())
+    
+    # Debug: print unique values for relevant columns
+    print("\nUnique values in WVHT:", df['WVHT'].unique()[:10])
+    print("Unique values in APD:", df['APD'].unique()[:10])
+    print("Unique values in DPD:", df['DPD'].unique()[:10])
+    print("Unique values in MWD:", df['MWD'].unique()[:10])
+    
+    # Create datetime index from the time columns
+    df['datetime'] = pd.to_datetime({
+        'year': df['YYYY'],
+        'month': df['MM'],
+        'day': df['DD'],
+        'hour': df['hh'],
+        'minute': df['mm']
+    })
+    
+    df = df.set_index('datetime')
+    
+    # Create new dataframe with the required columns
+    new_df = pd.DataFrame()
+    
+    # Convert values, replacing 999.0 with NaN (if present)
+    new_df['Hs_Buoy'] = df['WVHT'].replace(999.0, np.nan)  # Wave height
+    new_df['Tm_Buoy'] = df['APD'].replace(999.0, np.nan)   # Average period
+    new_df['Tp_Buoy'] = df['DPD'].replace(999.0, np.nan)   # Dominant period
+    new_df['Dir_Buoy'] = df['MWD'].replace(999, np.nan)    # Mean wave direction (int)
+    new_df['Spr_Buoy'] = np.nan     # Wave spread (filled with NaN)
+
+    
+    new_df.index = df.index
+    
+    # Save to pickle
+    new_df.to_pickle(output_file)
+    
+    print(f"Conversion complete. File saved as {output_file}")
+    print("\nFirst few rows of the converted data:")
+    print(new_df.head())
+    print("\nLast 5 rows of the converted data:")
+    print(new_df.tail())
+    
+    return output_file
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Convert buoy data from CSV to pickle format")
+    parser.add_argument("input_file", help="Path to the input CSV file")
+    parser.add_argument("-o", "--output", help="Path to the output pickle file (optional)")
+    
+    args = parser.parse_args()
+    
+    convert_to_pickle(args.input_file, args.output)
