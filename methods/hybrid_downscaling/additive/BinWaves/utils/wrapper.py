@@ -86,35 +86,52 @@ class BinWavesWrapper(SwanModelWrapper):
         """
 
         depth_array = depth_dataarray.values
-        locations_x, locations_y = np.meshgrid(
-            depth_dataarray.sel(
-                lon=slice(454373, 544488,10), lat=slice(3873157, 4094989, 10)
-            ).lon.values,
-            depth_dataarray.sel(
-                lon=slice(454373, 544488,10), lat=slice(3873157, 4094989, 10)
-            ).lat.values
-        )
-        self.locations = np.column_stack((locations_x.ravel(), locations_y.ravel()))
-        # Add specific buoy location 36.6120N, -74.8390W -buoy 44088
-        self.locations = np.vstack((self.locations, [514397.61, 4051843.74]))
-        #36.2580, -75.5930 (WGS84) - buoy 44100
-        self.locations = np.vstack((self.locations, [446728.66, 4012728.08]))
-        #36.0010, -75.4210 (WGS84) - buoy 44086
-        self.locations = np.vstack((self.locations, [462056.64, 3984141.31]))
-        # 36.2000, -75.7140 (WGS84) - buoy 44056
-        self.locations = np.vstack((self.locations, [435811.25, 4006367.97]))
-        #35.7500, -75.3300 (WGS84) - buoy 44095
-        self.locations = np.vstack((self.locations, [470164.24, 3956270.58]))
-        #35.0100, -75.4540 (WGS84) - buoy 41025
-        self.locations = np.vstack((self.locations, [458576.64, 3874246.18]))
-
-       
+        print("Original depth_dataarray shape:", depth_dataarray.shape)
+        print("Original lat values:", depth_dataarray.lat.values)
         
-        # Print dataset structure for debugging
-        print("Dataset coordinates:", depth_dataarray.coords)
-        print("Dataset dimensions:", depth_dataarray.dims)
-        print("Dataset variables:", depth_dataarray.variables if hasattr(depth_dataarray, 'variables') else "No variables")
-
+        # Get the actual lat values first
+        lat_values = depth_dataarray.lat.values
+        lon_values = depth_dataarray.lon.values
+        
+        # Find the indices for our desired range
+        lat_mask = (lat_values >= 3851757.252582) & (lat_values <= 4072853.979589)
+        lon_mask = (lon_values >= 371933.139407) & (lon_values <= 553525.417190)
+        
+        # Get the filtered values
+        filtered_lat = lat_values[lat_mask][::10]  # Take every 10th point
+        filtered_lon = lon_values[lon_mask][::10]  # Take every 10th point
+        
+        print("Filtered lat values:", filtered_lat)
+        print("Filtered lon values:", filtered_lon)
+        
+        locations_x, locations_y = np.meshgrid(filtered_lon, filtered_lat)
+        print("Meshgrid shapes - x:", locations_x.shape, "y:", locations_y.shape)
+        
+        self.locations = np.column_stack((locations_x.ravel(), locations_y.ravel()))
+        print("Final locations shape:", self.locations.shape)
+        print("First few locations:", self.locations[:5])
+        
+        # Add specific buoy locations
+        buoy_locations = np.array([
+            [514397.61, 4051843.74],  # 36.6120N, -74.8390W -buoy 44088
+            [446728.66, 4012728.08],  # 36.2580, -75.5930 (WGS84) - buoy 44100
+            [462056.64, 3984141.31],  # 36.0010, -75.4210 (WGS84) - buoy 44086
+            [435811.25, 4006367.97],  # 36.2000, -75.7140 (WGS84) - buoy 44056
+            [470164.24, 3956270.58],  # 35.7500, -75.3300 (WGS84) - buoy 44095
+            [474075.136, 3901692.114], # 35.2580, -75.2850 (WGS84) buoy 41120
+            [458576.64, 3874246.18],  # 35.0100, -75.4540 (WGS84) - buoy 41025
+        ])
+        
+        # Add buoy locations to the grid
+        self.locations = np.vstack((self.locations, buoy_locations))
+        print("Total number of locations after adding buoys:", len(self.locations))
+        print("Number of grid locations:", len(self.locations) - len(buoy_locations))
+        print("Number of buoy locations:", len(buoy_locations))
+        
+        # Get the last 6 positions (buoy locations)
+        self.sites_for_spectrum = list(range(-6, 0))  # This will give [-6, -5, -4, -3, -2, -1]
+        print("Sites for spectrum (last 6 positions):", self.sites_for_spectrum)
+        
         super().__init__(
             templates_dir=templates_dir,
             metamodel_parameters=metamodel_parameters,

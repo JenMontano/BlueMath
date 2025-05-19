@@ -71,9 +71,12 @@ def download_bulk_parameters(buoy_id, year):
                 
                 df = df[valid_dates].copy()
 
-                for col in ['WVHT', 'DPD', 'APD', 'MWD']:
+                for col in ['WVHT', 'DPD', 'APD']:
                     # Replace missing value codes with NaN
                     df[col] = df[col].replace([99.0, 999.0], np.nan)
+                    
+                    # Replace inf values with NaN
+                    df[col] = df[col].replace([np.inf, -np.inf], np.nan)
                     
                     # Wave height and periods should not be 0
                     if col in ['WVHT', 'DPD', 'APD']:
@@ -82,6 +85,18 @@ def download_bulk_parameters(buoy_id, year):
                     # Periods should not be greater than 30 seconds
                     if col in ['DPD', 'APD']:
                         df[col] = df[col].where(df[col] <= 30, np.nan)
+                    
+                    # Wave height should not be greater than 30 meters (extreme case)
+                    if col == 'WVHT':
+                        df[col] = df[col].where(df[col] <= 30, np.nan)
+                    
+                    # Direction should be between 0 and 360 degrees
+                    if col == 'MWD':
+                        df[col] = df[col].where((df[col] >= 0) & (df[col] <= 360), np.nan)
+                
+                # Remove rows where all wave parameters are NaN
+                wave_cols = ['WVHT', 'DPD', 'APD']
+                df = df.dropna(subset=wave_cols, how='all')
                 
                 if len(df) > 0:
                     return df
