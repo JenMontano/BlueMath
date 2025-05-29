@@ -1,5 +1,6 @@
 import numpy as np
 import xarray as xr
+from pyproj import Transformer
 
 
 def transform_ERA5_spectrum(
@@ -27,6 +28,31 @@ def transform_ERA5_spectrum(
 
     # First, reproject the wave spectra to the binwaves format
     ds = era5_spectrum.rename({"frequency": "freq", "direction": "dir"})
+    
+    # Round timestamps to nearest hour to ensure unique time values
+    ds = ds.assign_coords(time=ds.time.dt.round('H'))
+    
+    # Handle spatial coordinates
+    if 'utm_x' in ds.dims and 'utm_y' in ds.dims:
+        # Dataset already has UTM coordinates as dimensions
+        pass
+    elif 'longitude' in ds.coords and 'latitude' in ds.coords:
+        # Convert geographic coordinates to UTM coordinates
+        transformer = Transformer.from_crs("EPSG:4326", "EPSG:32618", always_xy=True)
+        
+        # Get the original coordinates
+        lon = ds.longitude.values
+        lat = ds.latitude.values
+        
+        # Convert to UTM
+        utm_x, utm_y = transformer.transform(lon, lat)
+        
+        # Create new dimensions for UTM coordinates
+        ds = ds.expand_dims({'utm_x': [utm_x[0]], 'utm_y': [utm_y[0]]})
+        
+        # Drop the old coordinates
+        ds = ds.drop_vars(['longitude', 'latitude'])
+    
     ds["efth"] = ds["efth"] * np.pi / 180.0
     ds["dir"] = ds["dir"] - 180.0
     ds["dir"] = np.where(ds["dir"] < 0, ds["dir"] + 360, ds["dir"])

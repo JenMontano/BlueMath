@@ -37,17 +37,17 @@ def plot_bulk_timeseries(buoy_id, base_dir):
         format='%Y-%m-%d %H:%M'
     )
 
-    for col in ['WVHT', 'DPD', 'APD', 'MWD']:
-        # Replace missing value codes with NaN
-        df[col] = df[col].replace([99.0, 999.0], np.nan)
+    # for col in ['WVHT', 'DPD', 'APD', 'MWD']:
+    #     # Replace missing value codes with NaN
+    #     df[col] = df[col].replace([99.0, 999.0], np.nan)
         
-        # Wave height and periods should not be 0
-        if col in ['WVHT', 'DPD', 'APD']:
-            df[col] = df[col].where(df[col] > 0, np.nan)
+    #     # Wave height and periods should not be 0
+    #     if col in ['WVHT', 'DPD', 'APD']:
+    #         df[col] = df[col].where(df[col] > 0, np.nan)
         
-        # Periods should not be greater than 30 seconds
-        if col in ['DPD', 'APD']:
-            df[col] = df[col].where(df[col] <= 30, np.nan)
+    #     # Periods should not be greater than 30 seconds
+    #     if col in ['DPD', 'APD']:
+    #         df[col] = df[col].where(df[col] <= 30, np.nan)
     
     # Create the plot 
     fig, (ax1, ax2, ax3) = plt.subplots(3, 1, figsize=(15, 15))

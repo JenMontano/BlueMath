@@ -84,25 +84,69 @@ class BinWavesWrapper(SwanModelWrapper):
         """
         Initialize the SWAN model wrapper.
         """
-
         depth_array = depth_dataarray.values
-        locations_x, locations_y = np.meshgrid(
-            depth_dataarray.sel(
-                lon=slice(300000, 500000), lat=slice(3400000, 4100000)
-            ).lon.values,
-            depth_dataarray.sel(
-                lon=slice(300000, 500000), lat=slice(3400000, 4100000)
-            ).lat.values
-        )
-        self.locations = np.column_stack((locations_x.ravel(), locations_y.ravel()))
-        # Add specific buoy location (33.4410°N, -77.7640°W)
-        self.locations = np.vstack((self.locations, [380000, 3700000]))
-
-        # Print dataset structure for debugging
-        print("Dataset coordinates:", depth_dataarray.coords)
-        print("Dataset dimensions:", depth_dataarray.dims)
-        print("Dataset variables:", depth_dataarray.variables if hasattr(depth_dataarray, 'variables') else "No variables")
-
+        print("Original depth_dataarray shape:", depth_dataarray.shape)
+        
+        # Get grid parameters from fixed_parameters
+        xpc = fixed_parameters['xpc']      # Origin x
+        ypc = fixed_parameters['ypc']      # Origin y
+        xlenc = fixed_parameters['xlenc']  # Length in x
+        ylenc = fixed_parameters['ylenc']  # Length in y
+        alpc = fixed_parameters['alpc']    # Rotation angle in degrees
+        
+        # Use 500m spacing in both directions
+        spacing = 5000  # 500m spacing
+        
+        # Calculate number of points in each direction
+        nx = int(xlenc / spacing) + 1  # Number of points along each line
+        ny = int(ylenc / spacing) + 1  # Number of parallel lines
+        
+        # Calculate angle in radians
+        angle_rad = np.radians(alpc)
+        
+        # Create vectors for the parallel lines
+        dx = spacing * np.cos(angle_rad)  # x-component for points along line
+        dy = spacing * np.sin(angle_rad)  # y-component for points along line
+        
+        # Create perpendicular vectors for the line spacing
+        dx_perp = -spacing * np.sin(angle_rad)  # perpendicular x-component
+        dy_perp = spacing * np.cos(angle_rad)   # perpendicular y-component
+        
+        # Initialize points list
+        points = []
+        
+        # Generate points along parallel lines
+        for i in range(ny):  # for each parallel line
+            # Starting point for this line
+            start_x = xpc + i * dx_perp
+            start_y = ypc + i * dy_perp
+            
+            # Generate points along this line
+            for j in range(nx):
+                x = start_x + j * dx
+                y = start_y + j * dy
+                points.append([x, y])
+        
+        # Convert to numpy array and keep all points
+        self.locations = np.array(points)
+        print("Grid points shape:", self.locations.shape)
+        
+        # Add buoy locations
+        buoy_locations = np.array([
+            [514397.61, 4051843.74],  # 36.6120N, -74.8390W -buoy 44088
+            [446728.66, 4012728.08],  # 36.2580, -75.5930 (WGS84) - buoy 44100
+            [462056.64, 3984141.31],  # 36.0010, -75.4210 (WGS84) - buoy 44086
+            [435811.25, 4006367.97],  # 36.2000, -75.7140 (WGS84) - buoy 44056
+            [470164.24, 3956270.58],  # 35.7500, -75.3300 (WGS84) - buoy 44095
+            [474075.136, 3901692.114], # 35.2580, -75.2850 (WGS84) buoy 41120
+            [458576.64, 3874246.18],  # 35.0100, -75.4540 (WGS84) - buoy 41025
+        ])
+        
+        # Add buoy locations to the grid
+        self.locations = np.vstack((self.locations, buoy_locations))
+        print("Number of grid locations:", len(self.locations) - len(buoy_locations))
+        print("Number of buoy locations:", len(buoy_locations))
+        
         super().__init__(
             templates_dir=templates_dir,
             metamodel_parameters=metamodel_parameters,
