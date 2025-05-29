@@ -281,12 +281,15 @@ def plot_wave_series(
     binwaves_data: wavespectra.SpecArray,
     offshore_data: wavespectra.SpecArray,
     times: np.ndarray,
+    save_dir: str = None,
+    buoyId: int = None,
 ):
     buoy_color = "lightcoral"
     binwaves_color = "royalblue"
     offshore_color = "gold"
 
-    fig, axes = plt.subplots(3, 1, figsize=(20, 10))
+    # First figure - Time series
+    fig1, axes = plt.subplots(3, 1, figsize=(20, 10))
     buoy_data["Hs_Buoy"].plot(ax=axes[0], label="Buoy", c=buoy_color, alpha=0.8, lw=1)
     buoy_data["Tp_Buoy"].plot(ax=axes[1], label="Buoy", c=buoy_color, alpha=0.8, lw=1)
     axes[2].scatter(
@@ -334,7 +337,8 @@ def plot_wave_series(
     for ax in axes:
         ax.set_title("")
 
-    fig, axes = plt.subplots(1, 3, figsize=(15, 5))
+    # Second figure - Scatter plots
+    fig2, axes = plt.subplots(1, 3, figsize=(15, 5))
     hs = np.vstack([buoy_data["Hs_Buoy"].values, binwaves_data.hs().values])
     hs = gaussian_kde(hs)(hs)
     axes[0].scatter(
@@ -417,7 +421,14 @@ def plot_wave_series(
         ax.tick_params(axis="x", colors="darkred")
         ax.tick_params(axis="y", colors="darkred")
 
-    return fig, axes
+    # Save figures if save_dir is provided
+    if save_dir is not None:
+        import os
+        os.makedirs(save_dir, exist_ok=True)
+        fig1.savefig(os.path.join(save_dir, f'timeseries_buoy_{buoyId}_validation.png'), dpi=300, bbox_inches='tight')
+        fig2.savefig(os.path.join(save_dir, f'scatter_buoy_{buoyId}_validation.png'), dpi=300, bbox_inches='tight')
+
+    return fig1, fig2, axes
 
 
 def create_white_zero_colormap(cmap_name="Spectral"):

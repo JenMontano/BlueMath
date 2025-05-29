@@ -4,8 +4,8 @@ from pyproj import Transformer
 transformer = Transformer.from_crs("EPSG:4326", "EPSG:32618", always_xy=True)
 
 # WGS84 limits
-min_lon, max_lon = -76.4, -74.4
-min_lat, max_lat = 34.8, 36.8
+min_lon, max_lon = 76.8000,-75.2000
+min_lat, max_lat = 34.4000, 35.6000
 
 # Convert to UTM
 min_x, min_y = transformer.transform(min_lon, min_lat)

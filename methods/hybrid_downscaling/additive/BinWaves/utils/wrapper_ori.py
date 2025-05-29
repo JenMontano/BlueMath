@@ -80,35 +80,52 @@ class BinWavesWrapper(SwanModelWrapper):
         depth_dataarray: xr.DataArray = None,
         templates_name: dict = "all",
         debug: bool = True,
+        lon_range: tuple = (454373, 544488),
+        lat_range: tuple = (3873157, 4094989),
+        buoy_locations: list = None,
     ) -> None:
         """
         Initialize the SWAN model wrapper.
+        
+        Args:
+            templates_dir (str): Directory containing template files
+            metamodel_parameters (dict): Parameters for the metamodel
+            fixed_parameters (dict): Fixed parameters for the model
+            output_dir (str): Directory for output files
+            depth_dataarray (xr.DataArray, optional): Depth data array
+            templates_name (dict, optional): Template names. Defaults to "all"
+            debug (bool, optional): Debug mode flag. Defaults to True
+            lon_range (tuple, optional): Longitude range (min, max). Defaults to (454373, 544488)
+            lat_range (tuple, optional): Latitude range (min, max). Defaults to (3873157, 4094989)
+            buoy_locations (list, optional): List of buoy locations as [lon, lat] pairs. Defaults to None
         """
-
         depth_array = depth_dataarray.values
         locations_x, locations_y = np.meshgrid(
             depth_dataarray.sel(
-                lon=slice(454373, 544488), lat=slice(3873157, 4094989)
+                lon=slice(lon_range[0], lon_range[1]), 
+                lat=slice(lat_range[0], lat_range[1])
             ).lon.values,
             depth_dataarray.sel(
-                lon=slice(454373, 544488), lat=slice(3873157, 4094989)
+                lon=slice(lon_range[0], lon_range[1]), 
+                lat=slice(lat_range[0], lat_range[1])
             ).lat.values
         )
         self.locations = np.column_stack((locations_x.ravel(), locations_y.ravel()))
-        # Add specific buoy location 36.6120N, -74.8390W -buoy 44088
-        self.locations = np.vstack((self.locations, [514397.61, 4051843.74]))
-        #36.2580, -75.5930 (WGS84) - buoy 44100
-        self.locations = np.vstack((self.locations, [446728.66, 4012728.08]))
-        #36.0010, -75.4210 (WGS84) - buoy 44086
-        self.locations = np.vstack((self.locations, [462056.64, 3984141.31]))
-        # 36.2000, -75.7140 (WGS84) - buoy 44056
-        self.locations = np.vstack((self.locations, [435811.25, 4006367.97]))
-        #35.7500, -75.3300 (WGS84) - buoy 44095
-        self.locations = np.vstack((self.locations, [470164.24, 3956270.58]))
-        #35.0100, -75.4540 (WGS84) - buoy 41025
-        self.locations = np.vstack((self.locations, [458576.64, 3874246.18]))
-
-       
+        
+        # Add buoy locations if provided
+        if buoy_locations is None:
+            # Default buoy locations if none provided
+            buoy_locations = [
+                [514397.61, 4051843.74],  # 36.6120N, -74.8390W - buoy 44088
+                [446728.66, 4012728.08],  # 36.2580, -75.5930 - buoy 44100
+                [462056.64, 3984141.31],  # 36.0010, -75.4210 - buoy 44086
+                [435811.25, 4006367.97],  # 36.2000, -75.7140 - buoy 44056
+                [470164.24, 3956270.58],  # 35.7500, -75.3300 - buoy 44095
+                [458576.64, 3874246.18],  # 35.0100, -75.4540 - buoy 41025
+            ]
+        
+        for buoy_loc in buoy_locations:
+            self.locations = np.vstack((self.locations, buoy_loc))
         
         # Print dataset structure for debugging
         print("Dataset coordinates:", depth_dataarray.coords)
@@ -164,3 +181,60 @@ class BinWavesWrapper(SwanModelWrapper):
             wavespectra.SpecDataset(mono_input_spectrum).to_swan(
                 op.join(case_dir, f"input_spectra_{side}.bnd")
             )
+
+    def plot_grid_on_bathy(self, bathy_dataarray: xr.DataArray, figsize=(12, 8)):
+        """
+        Plot the grid points on top of the bathymetry.
+        
+        Args:
+            bathy_dataarray (xr.DataArray): Bathymetry data array
+            figsize (tuple, optional): Figure size. Defaults to (12, 8)
+        """
+        import matplotlib.pyplot as plt
+        
+        # Create the figure and axis
+        fig, ax = plt.subplots(figsize=figsize)
+        
+        # Plot bathymetry
+        bathy_plot = ax.pcolormesh(
+            bathy_dataarray.lon,
+            bathy_dataarray.lat,
+            bathy_dataarray,
+            cmap='Blues_r',
+            shading='auto'
+        )
+        
+        # Add colorbar
+        cbar = plt.colorbar(bathy_plot, ax=ax)
+        cbar.set_label('Depth (m)')
+        
+        # Plot grid points
+        ax.scatter(
+            self.locations[:, 0],
+            self.locations[:, 1],
+            c='red',
+            s=10,
+            alpha=0.5,
+            label='Grid points'
+        )
+        
+        # Plot buoy locations (last 6 points)
+        ax.scatter(
+            self.locations[-6:, 0],
+            self.locations[-6:, 1],
+            c='yellow',
+            s=50,
+            marker='*',
+            label='Buoy locations'
+        )
+        
+        # Customize the plot
+        ax.set_xlabel('Longitude')
+        ax.set_ylabel('Latitude')
+        ax.set_title('Grid Points on Bathymetry')
+        ax.legend()
+        
+        # Make the plot look better
+        plt.tight_layout()
+        
+        return fig, ax

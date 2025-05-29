@@ -84,34 +84,54 @@ class BinWavesWrapper(SwanModelWrapper):
         """
         Initialize the SWAN model wrapper.
         """
-
         depth_array = depth_dataarray.values
         print("Original depth_dataarray shape:", depth_dataarray.shape)
-        print("Original lat values:", depth_dataarray.lat.values)
         
-        # Get the actual lat values first
-        lat_values = depth_dataarray.lat.values
-        lon_values = depth_dataarray.lon.values
+        # Get grid parameters from fixed_parameters
+        xpc = fixed_parameters['xpc']      # Origin x
+        ypc = fixed_parameters['ypc']      # Origin y
+        xlenc = fixed_parameters['xlenc']  # Length in x
+        ylenc = fixed_parameters['ylenc']  # Length in y
+        alpc = fixed_parameters['alpc']    # Rotation angle in degrees
         
-        # Find the indices for our desired range
-        lat_mask = (lat_values >= 3851757.252582) & (lat_values <= 4072853.979589)
-        lon_mask = (lon_values >= 371933.139407) & (lon_values <= 553525.417190)
+        # Use 500m spacing in both directions
+        spacing = 5000  # 500m spacing
         
-        # Get the filtered values
-        filtered_lat = lat_values[lat_mask][::10]  # Take every 10th point
-        filtered_lon = lon_values[lon_mask][::10]  # Take every 10th point
+        # Calculate number of points in each direction
+        nx = int(xlenc / spacing) + 1  # Number of points along each line
+        ny = int(ylenc / spacing) + 1  # Number of parallel lines
         
-        print("Filtered lat values:", filtered_lat)
-        print("Filtered lon values:", filtered_lon)
+        # Calculate angle in radians
+        angle_rad = np.radians(alpc)
         
-        locations_x, locations_y = np.meshgrid(filtered_lon, filtered_lat)
-        print("Meshgrid shapes - x:", locations_x.shape, "y:", locations_y.shape)
+        # Create vectors for the parallel lines
+        dx = spacing * np.cos(angle_rad)  # x-component for points along line
+        dy = spacing * np.sin(angle_rad)  # y-component for points along line
         
-        self.locations = np.column_stack((locations_x.ravel(), locations_y.ravel()))
-        print("Final locations shape:", self.locations.shape)
-        print("First few locations:", self.locations[:5])
+        # Create perpendicular vectors for the line spacing
+        dx_perp = -spacing * np.sin(angle_rad)  # perpendicular x-component
+        dy_perp = spacing * np.cos(angle_rad)   # perpendicular y-component
         
-        # Add specific buoy locations
+        # Initialize points list
+        points = []
+        
+        # Generate points along parallel lines
+        for i in range(ny):  # for each parallel line
+            # Starting point for this line
+            start_x = xpc + i * dx_perp
+            start_y = ypc + i * dy_perp
+            
+            # Generate points along this line
+            for j in range(nx):
+                x = start_x + j * dx
+                y = start_y + j * dy
+                points.append([x, y])
+        
+        # Convert to numpy array and keep all points
+        self.locations = np.array(points)
+        print("Grid points shape:", self.locations.shape)
+        
+        # Add buoy locations
         buoy_locations = np.array([
             [514397.61, 4051843.74],  # 36.6120N, -74.8390W -buoy 44088
             [446728.66, 4012728.08],  # 36.2580, -75.5930 (WGS84) - buoy 44100
@@ -124,13 +144,8 @@ class BinWavesWrapper(SwanModelWrapper):
         
         # Add buoy locations to the grid
         self.locations = np.vstack((self.locations, buoy_locations))
-        print("Total number of locations after adding buoys:", len(self.locations))
         print("Number of grid locations:", len(self.locations) - len(buoy_locations))
         print("Number of buoy locations:", len(buoy_locations))
-        
-        # Get the last 6 positions (buoy locations)
-        self.sites_for_spectrum = list(range(-6, 0))  # This will give [-6, -5, -4, -3, -2, -1]
-        print("Sites for spectrum (last 6 positions):", self.sites_for_spectrum)
         
         super().__init__(
             templates_dir=templates_dir,
