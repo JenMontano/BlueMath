@@ -11,6 +11,7 @@ from scipy.stats import gaussian_kde
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
 import xarray as xr
+import time
 
 
 # def plot_selected_bathy(bathy: xr.DataArray):
@@ -82,7 +83,7 @@ def plot_selected_bathy(bathy: xr.DataArray, utm_zone=18):
         ax=ax,
         x='lon',
         y='lat',
-        levels=[0, -10, -25, -50, -100, -200, -500, -1000],
+        levels=[0, 10, 25, 50, 100, 200, 500, 1000],
         cmap="Blues_r",
         add_colorbar=False,
         transform=proj
@@ -264,17 +265,139 @@ def create_text_with_metrics(array1: np.ndarray, array2: np.ndarray):
     """
     Create a text with metrics comparing two arrays.
     """
+    # Remove NaN values before calculating metrics
+    mask = np.isfinite(array1) & np.isfinite(array2)
+    array1_clean = array1[mask]
+    array2_clean = array2[mask]
+
+    if len(array1_clean) < 2:  # Need at least 2 points for statistics
+        return "MAE: nan\nRMSE: nan\nR²: nan"
 
     # Calculate metrics
-    mae = np.mean(np.abs(array1 - array2))
-    rmse = np.sqrt(np.mean((array1 - array2) ** 2))
-    r2 = np.corrcoef(array1, array2)[0, 1] ** 2
+    mae = np.mean(np.abs(array1_clean - array2_clean))
+    rmse = np.sqrt(np.mean((array1_clean - array2_clean) ** 2))
+    r2 = np.corrcoef(array1_clean, array2_clean)[0, 1] ** 2
 
     # Create text
     text = f"MAE: {mae:.2f}\nRMSE: {rmse:.2f}\nR²: {r2:.2f}"
 
     return text
 
+
+def clean_wave_data(buoy_data: wavespectra.SpecArray, binwaves_data: wavespectra.SpecArray, offshore_data: wavespectra.SpecArray):
+    """
+    Clean wave data by handling NaN and infinite values before plotting.
+    
+    Parameters
+    ----------
+    buoy_data : wavespectra.SpecArray
+        Buoy wave data
+    binwaves_data : wavespectra.SpecArray
+        BinWaves reconstructed data
+    offshore_data : wavespectra.SpecArray
+        Offshore wave data
+        
+    Returns
+    -------
+    tuple
+        Cleaned versions of (buoy_data, binwaves_data, offshore_data)
+    """
+    # Make copies to avoid modifying original data
+    buoy_clean = buoy_data.copy()
+    binwaves_clean = binwaves_data.copy()
+    offshore_clean = offshore_data.copy()
+    
+    # Clean Hs data
+    if 'Hs_Buoy' in buoy_clean:
+        hs_mean = np.nanmean(buoy_clean['Hs_Buoy'].values)
+        buoy_clean['Hs_Buoy'] = buoy_clean['Hs_Buoy'].fillna(hs_mean)
+    
+    # Clean Tp data
+    if 'Tp_Buoy' in buoy_clean:
+        tp_mean = np.nanmean(buoy_clean['Tp_Buoy'].values)
+        buoy_clean['Tp_Buoy'] = buoy_clean['Tp_Buoy'].fillna(tp_mean)
+    
+    # Clean Dir data
+    if 'Dir_Buoy' in buoy_clean:
+        dir_mean = np.nanmean(buoy_clean['Dir_Buoy'].values)
+        buoy_clean['Dir_Buoy'] = buoy_clean['Dir_Buoy'].fillna(dir_mean)
+    
+    # Handle infinite values in buoy data
+    for var in ['Hs_Buoy', 'Tp_Buoy', 'Dir_Buoy']:
+        if var in buoy_clean:
+            buoy_clean[var] = np.nan_to_num(buoy_clean[var].values, 
+                                          posinf=np.nanmean(buoy_clean[var].values),
+                                          neginf=np.nanmean(buoy_clean[var].values))
+    
+    # Clean BinWaves data
+    try:
+        # Get the wave parameters
+        hs_vals = binwaves_clean.spec.hs().values
+        tp_vals = binwaves_clean.spec.tp().values
+        dpm_vals = binwaves_clean.spec.dpm().values
+        
+        # Replace non-finite values with means
+        hs_vals[~np.isfinite(hs_vals)] = np.nanmean(hs_vals)
+        tp_vals[~np.isfinite(tp_vals)] = np.nanmean(tp_vals)
+        dpm_vals[~np.isfinite(dpm_vals)] = np.nanmean(dpm_vals)
+        
+        # Update the values in the dataset
+        binwaves_clean.spec.hs().values[:] = hs_vals
+        binwaves_clean.spec.tp().values[:] = tp_vals
+        binwaves_clean.spec.dpm().values[:] = dpm_vals
+    except AttributeError as e:
+        print(f"Warning: Could not clean BinWaves data: {str(e)}")
+    
+    # Clean Offshore data
+    try:
+        # Get the wave parameters
+        hs_vals = offshore_clean.spec.hs().values
+        tp_vals = offshore_clean.spec.tp().values
+        dpm_vals = offshore_clean.spec.dpm().values
+        
+        # Replace non-finite values with means
+        hs_vals[~np.isfinite(hs_vals)] = np.nanmean(hs_vals)
+        tp_vals[~np.isfinite(tp_vals)] = np.nanmean(tp_vals)
+        dpm_vals[~np.isfinite(dpm_vals)] = np.nanmean(dpm_vals)
+        
+        # Update the values in the dataset
+        offshore_clean.spec.hs().values[:] = hs_vals
+        offshore_clean.spec.tp().values[:] = tp_vals
+        offshore_clean.spec.dpm().values[:] = dpm_vals
+    except AttributeError as e:
+        print(f"Warning: Could not clean Offshore data: {str(e)}")
+    
+    return buoy_clean, binwaves_clean, offshore_clean
+
+
+def safe_kde(data):
+    """
+    Safely compute KDE for stacked data, handling NaN and Inf values.
+    
+    Parameters
+    ----------
+    data : np.ndarray
+        Stacked array of shape (2, N) containing the two variables to compare
+        
+    Returns
+    -------
+    np.ndarray
+        KDE values or None if computation fails
+    """
+    try:
+        # Remove any rows with NaN or Inf
+        mask = np.isfinite(data).all(axis=0)
+        clean_data = data[:, mask]
+        
+        if clean_data.shape[1] < 2:  # Need at least 2 points for KDE
+            return None
+            
+        # Compute KDE on clean data and evaluate on original points
+        kde = gaussian_kde(clean_data)
+        return kde(data)
+    except Exception as e:
+        print(f"KDE calculation failed: {str(e)}")
+        return None
 
 def plot_wave_series(
     buoy_data: wavespectra.SpecArray,
@@ -300,29 +423,29 @@ def plot_wave_series(
         alpha=0.8,
         s=1,
     )
-    binwaves_data.hs().plot(
+    binwaves_data.spec.hs().plot(
         ax=axes[0], label="BinWaves", c=binwaves_color, alpha=0.8, lw=1
     )
-    binwaves_data.tp().plot(
+    binwaves_data.spec.tp().plot(
         ax=axes[1], label="BinWaves", c=binwaves_color, alpha=0.8, lw=1
     )
     axes[2].scatter(
         times,
-        binwaves_data.dpm().values,
+        binwaves_data.spec.dpm().values,
         c=binwaves_color,
         label="BinWaves",
         alpha=0.8,
         s=1,
     )
-    offshore_data.hs().plot(
+    offshore_data.spec.hs().plot(
         ax=axes[0], label="Offshore", c=offshore_color, alpha=0.5, lw=1
     )
-    offshore_data.tp().plot(
+    offshore_data.spec.tp().plot(
         ax=axes[1], label="Offshore", c=offshore_color, alpha=0.5, lw=1
     )
     axes[2].scatter(
         times,
-        offshore_data.dpm().values,
+        offshore_data.spec.dpm().values,
         c=offshore_color,
         label="Offshore",
         alpha=0.8,
@@ -339,11 +462,11 @@ def plot_wave_series(
 
     # Second figure - Scatter plots
     fig2, axes = plt.subplots(1, 3, figsize=(15, 5))
-    hs = np.vstack([buoy_data["Hs_Buoy"].values, binwaves_data.hs().values])
+    hs = np.vstack([buoy_data["Hs_Buoy"].values, binwaves_data.spec.hs().values])
     hs = gaussian_kde(hs)(hs)
     axes[0].scatter(
         buoy_data["Hs_Buoy"].values,
-        binwaves_data.hs().values,
+        binwaves_data.spec.hs().values,
         s=1,
         c=hs,
         cmap="turbo",
@@ -352,7 +475,7 @@ def plot_wave_series(
         5,
         0.5,
         create_text_with_metrics(
-            buoy_data["Hs_Buoy"].values, binwaves_data.hs().values
+            buoy_data["Hs_Buoy"].values, binwaves_data.spec.hs().values
         ),
         color="darkred",
     )
@@ -361,11 +484,11 @@ def plot_wave_series(
     axes[0].set_ylabel("Hs - BinWaves [m]")
     axes[0].set_xlim([0, 7])
     axes[0].set_ylim([0, 7])
-    tp = np.vstack([buoy_data["Tp_Buoy"].values, binwaves_data.tp().values])
+    tp = np.vstack([buoy_data["Tp_Buoy"].values, binwaves_data.spec.tp().values])
     tp = gaussian_kde(tp)(tp)
     axes[1].scatter(
         buoy_data["Tp_Buoy"].values,
-        binwaves_data.tp().values,
+        binwaves_data.spec.tp().values,
         s=1,
         c=tp,
         cmap="turbo",
@@ -375,7 +498,7 @@ def plot_wave_series(
         15,
         1.25,
         create_text_with_metrics(
-            buoy_data["Tp_Buoy"].values, binwaves_data.tp().values
+            buoy_data["Tp_Buoy"].values, binwaves_data.spec.tp().values
         ),
         color="darkred",
     )
@@ -384,11 +507,11 @@ def plot_wave_series(
     axes[1].set_ylabel("Tp - BinWaves [s]")
     axes[1].set_xlim([0, 20])
     axes[1].set_ylim([0, 20])
-    dpm = np.vstack([buoy_data["Dir_Buoy"].values, binwaves_data.dpm().values])
+    dpm = np.vstack([buoy_data["Dir_Buoy"].values, binwaves_data.spec.dpm().values])
     dpm = gaussian_kde(dpm)(dpm)
     axes[2].scatter(
         buoy_data["Dir_Buoy"].values,
-        binwaves_data.dpm().values,
+        binwaves_data.spec.dpm().values,
         s=1,
         c=dpm,
         cmap="turbo",
@@ -398,7 +521,7 @@ def plot_wave_series(
         250,
         25,
         create_text_with_metrics(
-            buoy_data["Dir_Buoy"].values, binwaves_data.dpm().values
+            buoy_data["Dir_Buoy"].values, binwaves_data.spec.dpm().values
         ),
         color="darkred",
     )
@@ -425,8 +548,8 @@ def plot_wave_series(
     if save_dir is not None:
         import os
         os.makedirs(save_dir, exist_ok=True)
-        fig1.savefig(os.path.join(save_dir, f'timeseries_buoy_{buoyId}_validation.png'), dpi=300, bbox_inches='tight')
-        fig2.savefig(os.path.join(save_dir, f'scatter_buoy_{buoyId}_validation.png'), dpi=300, bbox_inches='tight')
+        fig1.savefig(os.path.join(save_dir, f'timeseries_buoy_{buoyId}_validation_sat.png'), dpi=300, bbox_inches='tight')
+        fig2.savefig(os.path.join(save_dir, f'scatter_buoy_{buoyId}_validation_sat.png'), dpi=300, bbox_inches='tight')
 
     return fig1, fig2, axes
 
@@ -483,7 +606,7 @@ def plot_spectrum_in_coastline(
     reconstruction_kps: xr.Dataset,
     offshore_spectra: xr.Dataset,
     time_to_plot: str,
-    sites_for_spectrum: list,
+    sites_for_spectrum: list = None,
 ):
     """
     Plot gridded graph with wave spectra at different locations.
@@ -506,7 +629,7 @@ def plot_spectrum_in_coastline(
         Offshore spectra
     time_to_plot : str
         Time to plot in ISO format (e.g., '2009-01-01T00:00:00')
-    sites_for_spectrum : list
+    sites_for_spectrum : list, optional
         List of site indices to plot spectra for
     """
 
@@ -515,8 +638,8 @@ def plot_spectrum_in_coastline(
     # Plot bathymetry as a countour (using UTM coordinates cx, cy)
     bathy.plot.contourf(
         ax=ax,
-        x='cx',
-        y='cy',
+        x='lon',
+        y='lat',
         levels=[0, -10, -25, -50, -100, -200, -500, -1000],
         cmap="Blues_r",
         add_colorbar=False,
@@ -526,13 +649,15 @@ def plot_spectrum_in_coastline(
     time_to_plot_dt = np.datetime64(time_to_plot)
     reconstructed_time_idx = np.abs(reconstructed_onshore_spectra.time.values - time_to_plot_dt).argmin()
     offshore_time_idx = np.abs(offshore_spectra.time.values - time_to_plot_dt).argmin()
-
-    # Plot reconstructed Hs in grid (using UTM coordinates utm_x, utm_y)
+    
+    # Get Hs for the specific time
     hs_map = (
         reconstructed_onshore_spectra.isel(time=reconstructed_time_idx)
         .kp.spec.hs()
         .values
     )
+    
+    # Plot Hs in grid (using UTM coordinates utm_x, utm_y)
     phs = ax.scatter(
         reconstruction_kps.utm_x.values,
         reconstruction_kps.utm_y.values,
@@ -542,26 +667,27 @@ def plot_spectrum_in_coastline(
     plt.colorbar(phs).set_label("Hs [m]")
 
     # Plot onshore spectra at sites (using UTM coordinates utm_x, utm_y)
-    for site in sites_for_spectrum:
-        lon = reconstructed_onshore_spectra.utm_x.values[site]
-        lat = reconstructed_onshore_spectra.utm_y.values[site]
-        axin = ax.inset_axes(
-            [lon, lat, 55000, 55000], transform=ax.transData, projection="polar"
-        )
-        ax.scatter(lon, lat, c="black", marker="*", s=500)
-        axin.pcolormesh(
-            np.deg2rad(reconstructed_onshore_spectra.dir.values),
-            reconstructed_onshore_spectra.freq.values,
-            np.sqrt(
-                reconstructed_onshore_spectra.isel(time=reconstructed_time_idx)
-                .isel(site=site)
-                .kp
-            ),
-            cmap=colormap_spectra(),
-        )
-        axin.set_theta_zero_location("N", offset=0)
-        axin.set_theta_direction(-1)
-        axin.axis("off")
+    if sites_for_spectrum is not None:
+        for site in sites_for_spectrum:
+            lon = reconstructed_onshore_spectra.utm_x.values[site]
+            lat = reconstructed_onshore_spectra.utm_y.values[site]
+            axin = ax.inset_axes(
+                [lon, lat, 55000, 55000], transform=ax.transData, projection="polar"
+            )
+            ax.scatter(lon, lat, c="black", marker="*", s=500)
+            axin.pcolormesh(
+                np.deg2rad(reconstructed_onshore_spectra.dir.values),
+                reconstructed_onshore_spectra.freq.values,
+                np.sqrt(
+                    reconstructed_onshore_spectra.isel(time=reconstructed_time_idx)
+                    .isel(site=site)
+                    .kp
+                ),
+                cmap=colormap_spectra(),
+            )
+            axin.set_theta_zero_location("N", offset=0)
+            axin.set_theta_direction(-1)
+            axin.axis("off")
 
     # Plot offshore spectrum at the actual spectral point location
     # Note: offshore_spectra uses 'longitude' and 'latitude' names but they are actually UTM coordinates
@@ -583,13 +709,213 @@ def plot_spectrum_in_coastline(
     axoff.set_theta_direction(-1)
     axoff.axis("off")
 
-    # Set the plot bounds
-    plot_bounds = (
-        363000.0,    # min easting (slightly less than GEBCO min: 363166.25)
-        546000.0,    # max easting (slightly more than GEBCO max: 545566.25)
-        3873000.0,   # min northing (slightly less than GEBCO min: 3873132.82)
-        4096000.0,   # max northing (slightly more than GEBCO max: 4095832.82)
-    )
-    ax.axis(plot_bounds)
+    return fig, ax
 
+
+def plot_bathy_swan_grid(bathy: xr.DataArray, fixed_params: dict, utm_zone=18, skip_lines=20, plot_all_lines=False, points=None, point_labels=None):
+    """
+    Plot bathymetry with SWAN computational grid overlay.
+    
+    Parameters
+    ----------
+    bathy : xr.DataArray
+        Bathymetry data
+    fixed_params : dict
+        Dictionary containing grid parameters (xpc, ypc, alpc, xlenc, ylenc, mxc, myc)
+    utm_zone : int
+        UTM zone number
+    skip_lines : int
+        Plot every nth line if plot_all_lines is False
+    plot_all_lines : bool
+        If True, plots all grid lines (warning: may be very dense)
+    points : list of tuples, optional
+        List of (x, y) coordinates to plot as points
+    point_labels : list of str, optional
+        Labels for the points to show in legend
+    """
+    # Set up the projection
+    proj = ccrs.UTM(zone=utm_zone)
+    fig, ax = plt.subplots(figsize=(12, 8), subplot_kw={'projection': proj})
+    
+    # Plot bathymetry
+    bathy.plot.contourf(
+        ax=ax,
+        x='lon',
+        y='lat',
+        levels=[0,10, 25, 50, 100, 200, 500, 1000],
+        cmap="Blues_r",
+        add_colorbar=True,
+        transform=proj
+    )
+    
+    # Add coastline
+    ax.add_feature(cfeature.COASTLINE, linewidth=1.5, zorder=20)
+    
+    # Extract grid parameters
+    xpc = fixed_params['xpc']
+    ypc = fixed_params['ypc']
+    alpc = fixed_params['alpc']
+    xlenc = fixed_params['xlenc']
+    ylenc = fixed_params['ylenc']
+    mxc = fixed_params['mxc']
+    myc = fixed_params['myc']
+    
+    # Convert angle to radians
+    angle_rad = np.radians(alpc)
+    
+    # Calculate actual grid spacing (500m x 500m)
+    dx = xlenc / mxc  # Should be 500m
+    dy = ylenc / myc  # Should be 500m
+    
+    # Calculate rotated vectors
+    dx_rot = dx * np.cos(angle_rad)
+    dy_rot = dx * np.sin(angle_rad)
+    dx_perp = -dy * np.sin(angle_rad)
+    dy_perp = dy * np.cos(angle_rad)
+    
+    # Determine line plotting interval
+    skip = 1 if plot_all_lines else skip_lines
+    
+    # Define grid line style
+    grid_color = '0.7'  # Light gray in matplotlib notation (0.7 means 70% white)
+    grid_alpha = 0.4
+    
+    # Plot x-direction lines
+    for i in range(0, myc + 1, skip):
+        start_x = xpc + i * dx_perp
+        start_y = ypc + i * dy_perp
+        end_x = start_x + xlenc * np.cos(angle_rad)
+        end_y = start_y + xlenc * np.sin(angle_rad)
+        ax.plot([start_x, end_x], [start_y, end_y], 
+                color=grid_color, alpha=grid_alpha, linewidth=0.5, transform=proj)
+    
+    # Plot y-direction lines
+    for i in range(0, mxc + 1, skip):
+        start_x = xpc + i * dx_rot
+        start_y = ypc + i * dy_rot
+        end_x = start_x - ylenc * np.sin(angle_rad)
+        end_y = start_y + ylenc * np.cos(angle_rad)
+        ax.plot([start_x, end_x], [start_y, end_y], 
+                color=grid_color, alpha=grid_alpha, linewidth=0.5, transform=proj)
+    
+    # Plot grid outline with more emphasis
+    corners = np.array([
+        [xpc, ypc],  # Bottom left
+        [xpc + xlenc * np.cos(angle_rad), ypc + xlenc * np.sin(angle_rad)],  # Bottom right
+        [xpc + xlenc * np.cos(angle_rad) - ylenc * np.sin(angle_rad), 
+         ypc + xlenc * np.sin(angle_rad) + ylenc * np.cos(angle_rad)],  # Top right
+        [xpc - ylenc * np.sin(angle_rad), ypc + ylenc * np.cos(angle_rad)],  # Top left
+        [xpc, ypc]  # Close the polygon
+    ])
+    # Plot outline in a darker gray with more opacity
+    ax.plot(corners[:, 0], corners[:, 1], color='0.4', alpha=0.8, 
+            linewidth=2, transform=proj, label=f'SWAN Grid\nResolution: {dx:.1f}m x {dy:.1f}m')
+    
+    # Plot additional points if provided
+    if points is not None:
+        if not isinstance(points, list):
+            points = [points]  # Convert single point to list
+        if point_labels is None:
+            point_labels = [f'Point {i+1}' for i in range(len(points))]
+        
+        for (x, y), label in zip(points, point_labels):
+            ax.plot(x, y, 'k*', markersize=10, label=label, transform=proj)
+            # Add text annotation with white background
+            ax.text(x + 1000, y + 1000, label, transform=proj,
+                   bbox=dict(facecolor='white', alpha=0.7, edgecolor='none'))
+    
+    # Add scale bar (10 km)
+    scale_bar_length = 10000  # 10 km
+    scale_bar_x = corners[0, 0] + 20000  # Offset from bottom left corner
+    scale_bar_y = corners[0, 1] + 20000
+    ax.plot([scale_bar_x, scale_bar_x + scale_bar_length], 
+            [scale_bar_y, scale_bar_y], 
+            'k-', linewidth=2, transform=proj)
+    ax.text(scale_bar_x + scale_bar_length/2, scale_bar_y - 2000, 
+            '10 km', ha='center', transform=proj,
+            bbox=dict(facecolor='white', alpha=0.7, edgecolor='none'))
+    
+    ax.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+    ax.set_aspect('equal')
+    
+    # Set extent to show both bathymetry and grid
+    margin = 50000  # 50km margin (increased from 10km)
+    ax.set_extent([
+        min(bathy.lon.min(), corners[:, 0].min()) - margin,
+        max(bathy.lon.max(), corners[:, 0].max()) + margin,
+        min(bathy.lat.min(), corners[:, 1].min()) - margin,
+        max(bathy.lat.max(), corners[:, 1].max()) + margin
+    ], crs=proj)
+    
+    plt.show()
+
+
+def plot_bathy_with_locations(bathy: xr.DataArray, locations_file: str, utm_zone=18):
+    """
+    Plot bathymetry with SWAN output locations overlay.
+    
+    Parameters
+    ----------
+    bathy : xr.DataArray
+        Bathymetry data
+    locations_file : str
+        Path to the SWAN locations file
+    utm_zone : int
+        UTM zone number
+    """
+    # Set up the projection
+    proj = ccrs.UTM(zone=utm_zone)
+    fig, ax = plt.subplots(figsize=(12, 8), subplot_kw={'projection': proj})
+    
+    # Plot bathymetry
+    bathy.plot.contourf(
+        ax=ax,
+        x='lon',
+        y='lat',
+        levels=[-1000, -500, -200, -100, -50, -25, -10, 0],
+        cmap="Blues_r",
+        add_colorbar=True,
+        transform=proj
+    )
+    
+    # Add coastline
+    ax.add_feature(cfeature.COASTLINE, linewidth=1.5, zorder=20)
+    
+    # Load and plot locations
+    locations = np.loadtxt(locations_file)
+    x_coords = locations[:, 0]
+    y_coords = locations[:, 1]
+    
+    # Plot locations with small dots
+    scatter = ax.scatter(x_coords, y_coords, 
+                        c='0.4',           # Dark gray color
+                        alpha=0.6,         # 60% opacity
+                        s=2,               # Small point size
+                        transform=proj,
+                        label=f'Output locations\n({len(x_coords)} points)')
+    
+    # Add scale bar (10 km)
+    scale_bar_length = 10000  # 10 km
+    scale_bar_x = x_coords[0] + 20000  # Offset from first point
+    scale_bar_y = y_coords[0] + 20000
+    ax.plot([scale_bar_x, scale_bar_x + scale_bar_length], 
+            [scale_bar_y, scale_bar_y], 
+            'k-', linewidth=2, transform=proj)
+    ax.text(scale_bar_x + scale_bar_length/2, scale_bar_y - 2000, 
+            '10 km', ha='center', transform=proj)
+    
+    ax.legend()
+    ax.set_aspect('equal')
+    
+    # Set extent to show both bathymetry and locations
+    margin = 10000  # 10km margin
+    ax.set_extent([
+        min(bathy.lon.min(), x_coords.min()) - margin,
+        max(bathy.lon.max(), x_coords.max()) + margin,
+        min(bathy.lat.min(), y_coords.min()) - margin,
+        max(bathy.lat.max(), y_coords.max()) + margin
+    ], crs=proj)
+    
+    plt.show()
+    
     return fig, ax

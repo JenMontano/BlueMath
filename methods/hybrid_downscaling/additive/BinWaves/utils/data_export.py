@@ -52,7 +52,7 @@ def save_wave_series_to_csv(
     print("Creating 3-hourly version...")
     df_3h = df.resample('3H', on='date').mean()
     # Insert '_3h' before the .csv extension
-    output_file_3h = output_file.replace('_validation.csv', '_validation_3h.csv')
+    output_file_3h = output_file.replace('_validation_sat.csv', '_validation_sat_3h.csv')
     print(f"Saving 3-hourly data to: {output_file_3h}")
     df_3h.to_csv(output_file_3h, date_format='%Y-%m-%d %H:%M:%S')
     print("Successfully saved 3-hourly data") 
