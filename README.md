@@ -33,7 +33,15 @@ BlueMath aims to provide tools (toolkit), methods (hybrid downscaling, statistic
 
 Since the workshop in 2020, more universities has been interested in collaborating in the development of this community model BlueMath: UFSC (Brazil), TU Delft (Netherlands), UCSC (USA), ERDC (USA), IFCA (Spain). The collaboration of these institutions with the GeoOcean group of the University of Cantabria is being carried out through different mechanisms (sharing data bases, computer codes and methodologies, co-op agreements, consultancy projects, research projects, exchange of researchers).
 
+## Working Examples
+
+| Name               | Tested Image Version | Tested Commit                            | Path to Example                              |
+| ------------------ | -------------------- | ---------------------------------------- | -------------------------------------------- |
+| BinWaves_Cantabria | geoocean/rocky8:1.9  | 26abc2e7aa3dac6b4b6877e580f2006d892939ad | climate_services/hindcast/BinWaves_Cantabria |
+| MUSCLE_Aveiro      | geoocean/rocky8:1.9  | 26e1d7f79442dc13d53004fd8619df172308656f | climate_services/probabilistic/MUSCLE_Aveiro |
+
 ## Tips
 
 If `bluemath-tk` package is not recognized in a notebook:
+
 - Open VSCode pallette command (Ctrl + Shift + P o Cmd + Shift + P in macOS) and select: **Python: Restart Language Server**.
