@@ -35,12 +35,13 @@ Since the workshop in 2020, more universities has been interested in collaborati
 
 ## Working Examples
 
-| Name               | Tested Image Version | Tested Commit                            | Path to Example                                        |
-| ------------------ | -------------------- | ---------------------------------------- | ------------------------------------------------------ |
-| BinWaves_Cantabria | geoocean/rocky8:1.9  | 26abc2e7aa3dac6b4b6877e580f2006d892939ad | climate_services/hindcast/BinWaves_Cantabria           |
-| MUSCLE_Aveiro      | geoocean/rocky8:1.9  | 26e1d7f79442dc13d53004fd8619df172308656f | climate_services/probabilistic/MUSCLE_Aveiro           |
-| HySwash/Veggy      | geoocean/rocky8:1.9  | 56413fb96147bab9d495af793ccd29cc88fea44f | methods/hybrid_downscaling/metamodels/HySwash/Veggy    |
-| HySwash/CHySwash   | geoocean/rocky8:1.9  | 56413fb96147bab9d495af793ccd29cc88fea44f | methods/hybrid_downscaling/metamodels/HySwash/CHySwash |
+| Name               | Tested Image Version | Tested Commit                            | Path to Example                                        | Cloud |
+| ------------------ | -------------------- | ---------------------------------------- | ------------------------------------------------------ | ✅    |
+| BinWaves_Cantabria | geoocean/rocky8:1.9  | 26abc2e7aa3dac6b4b6877e580f2006d892939ad | climate_services/hindcast/BinWaves_Cantabria           | ✅    |
+| MUSCLE_Aveiro      | geoocean/rocky8:1.9  | 26e1d7f79442dc13d53004fd8619df172308656f | climate_services/probabilistic/MUSCLE_Aveiro           | ✅    |
+| HySwash/Veggy      | geoocean/rocky8:1.9  | 56413fb96147bab9d495af793ccd29cc88fea44f | methods/hybrid_downscaling/metamodels/HySwash/Veggy    | ✅    |
+| HySwash/CHySwash   | geoocean/rocky8:1.9  | 56413fb96147bab9d495af793ccd29cc88fea44f | methods/hybrid_downscaling/metamodels/HySwash/CHySwash | ❌    |
+| SHyTCWaves         | geoocean/rocky8:1.9  | 56413fb96147bab9d495af793ccd29cc88fea44f | methods/hybrid_downscaling/metamodels/SHyTCWaves       | ❌    |
 
 ## Tips
 
