@@ -4,7 +4,7 @@ import numpy as np
 
 # Load the data
 print("Loading data...")
-era5_spectrum = xr.open_dataset("inputs/superpoint_result.nc")
+era5_spectrum = xr.open_dataset("inputs/superpoint_result_NO_satelliteCorrection.nc")
 model_parameters = pd.read_csv("CASES/swan_cases.csv").to_dict(orient="list")
 
 # Get unique frequencies and directions from the case parameters

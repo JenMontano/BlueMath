@@ -324,15 +324,52 @@ def plot_wave_series(
     binwaves_data: wavespectra.SpecArray,
     offshore_data: wavespectra.SpecArray,
     times: np.ndarray,
+    save_plots: bool = False,
+    save_path: str = "wave_validation_plots",
+    title_prefix: str = "Wave Validation",
+    dpi: int = 300,
+    format: str = "png",
 ):
+    """
+    Plot wave series comparison between buoy, BinWaves, and offshore data.
+    
+    Parameters:
+    -----------
+    buoy_data : wavespectra.SpecArray
+        Buoy wave data
+    binwaves_data : wavespectra.SpecArray
+        BinWaves reconstructed data
+    offshore_data : wavespectra.SpecArray
+        Offshore wave data
+    times : np.ndarray
+        Time array for plotting
+    save_plots : bool, optional
+        Whether to save the plots to files (default: False)
+    save_path : str, optional
+        Base path for saving plots (default: "wave_validation_plots")
+    title_prefix : str, optional
+        Prefix for plot titles (default: "Wave Validation")
+    dpi : int, optional
+        DPI for saved plots (default: 300)
+    format : str, optional
+        Format for saved plots (default: "png")
+    
+    Returns:
+    --------
+    tuple
+        (fig1, axes1, fig2, axes2) - Both figure and axes objects
+    """
     buoy_color = "lightcoral"
     binwaves_color = "royalblue"
     offshore_color = "gold"
 
-    fig, axes = plt.subplots(3, 1, figsize=(20, 10))
-    buoy_data["Hs_Buoy"].plot(ax=axes[0], label="Buoy", c=buoy_color, alpha=0.8, lw=1)
-    buoy_data["Tp_Buoy"].plot(ax=axes[1], label="Buoy", c=buoy_color, alpha=0.8, lw=1)
-    axes[2].scatter(
+    # Create first figure: Time series plots
+    fig1, axes1 = plt.subplots(3, 1, figsize=(20, 10))
+    
+    # Plot time series
+    buoy_data["Hs_Buoy"].plot(ax=axes1[0], label="Buoy", c=buoy_color, alpha=0.8, lw=1)
+    buoy_data["Tp_Buoy"].plot(ax=axes1[1], label="Buoy", c=buoy_color, alpha=0.8, lw=1)
+    axes1[2].scatter(
         times,
         buoy_data["Dir_Buoy"].values,
         c=buoy_color,
@@ -341,12 +378,12 @@ def plot_wave_series(
         s=1,
     )
     binwaves_data.hs().plot(
-        ax=axes[0], label="BinWaves", c=binwaves_color, alpha=0.8, lw=1
+        ax=axes1[0], label="BinWaves", c=binwaves_color, alpha=0.8, lw=1
     )
     binwaves_data.tp().plot(
-        ax=axes[1], label="BinWaves", c=binwaves_color, alpha=0.8, lw=1
+        ax=axes1[1], label="BinWaves", c=binwaves_color, alpha=0.8, lw=1
     )
-    axes[2].scatter(
+    axes1[2].scatter(
         times,
         binwaves_data.dpm().values,
         c=binwaves_color,
@@ -355,12 +392,12 @@ def plot_wave_series(
         s=1,
     )
     offshore_data.hs().plot(
-        ax=axes[0], label="Offshore", c=offshore_color, alpha=0.5, lw=1
+        ax=axes1[0], label="Offshore", c=offshore_color, alpha=0.5, lw=1
     )
     offshore_data.tp().plot(
-        ax=axes[1], label="Offshore", c=offshore_color, alpha=0.5, lw=1
+        ax=axes1[1], label="Offshore", c=offshore_color, alpha=0.5, lw=1
     )
-    axes[2].scatter(
+    axes1[2].scatter(
         times,
         offshore_data.dpm().values,
         c=offshore_color,
@@ -369,25 +406,30 @@ def plot_wave_series(
         s=1,
     )
 
-    # Set labels
-    axes[0].set_ylabel("Hs [m]")
-    axes[0].legend()
-    axes[1].set_ylabel("T [s] - tp")
-    axes[2].set_ylabel("Dir [°] - dm")
-    for ax in axes:
+    # Set labels and title for time series
+    fig1.suptitle(f"{title_prefix} - Time Series", fontsize=16, fontweight='bold')
+    axes1[0].set_ylabel("Hs [m]")
+    axes1[0].legend()
+    axes1[1].set_ylabel("T [s] - tp")
+    axes1[2].set_ylabel("Dir [°] - dm")
+    for ax in axes1:
         ax.set_title("")
+        ax.grid(True, alpha=0.3)
 
-    fig, axes = plt.subplots(1, 3, figsize=(15, 5))
+    # Create second figure: Scatter plots
+    fig2, axes2 = plt.subplots(1, 3, figsize=(15, 5))
+    
+    # Hs scatter plot
     hs = np.vstack([buoy_data["Hs_Buoy"].values, binwaves_data.hs().values])
     hs = gaussian_kde(hs)(hs)
-    axes[0].scatter(
+    axes2[0].scatter(
         buoy_data["Hs_Buoy"].values,
         binwaves_data.hs().values,
         s=1,
         c=hs,
         cmap="turbo",
     )
-    axes[0].text(
+    axes2[0].text(
         5,
         0.5,
         create_text_with_metrics(
@@ -395,14 +437,16 @@ def plot_wave_series(
         ),
         color="darkred",
     )
-    axes[0].plot([0, 7], [0, 7], c="darkred", linestyle="--")
-    axes[0].set_xlabel("Hs - Buoy [m]")
-    axes[0].set_ylabel("Hs - BinWaves [m]")
-    axes[0].set_xlim([0, 7])
-    axes[0].set_ylim([0, 7])
+    axes2[0].plot([0, 7], [0, 7], c="darkred", linestyle="--")
+    axes2[0].set_xlabel("Hs - Buoy [m]")
+    axes2[0].set_ylabel("Hs - BinWaves [m]")
+    axes2[0].set_xlim([0, 7])
+    axes2[0].set_ylim([0, 7])
+    
+    # Tp scatter plot
     tp = np.vstack([buoy_data["Tp_Buoy"].values, binwaves_data.tp().values])
     tp = gaussian_kde(tp)(tp)
-    axes[1].scatter(
+    axes2[1].scatter(
         buoy_data["Tp_Buoy"].values,
         binwaves_data.tp().values,
         s=1,
@@ -410,7 +454,7 @@ def plot_wave_series(
         cmap="turbo",
         label="Tp",
     )
-    axes[1].text(
+    axes2[1].text(
         15,
         1.25,
         create_text_with_metrics(
@@ -418,14 +462,16 @@ def plot_wave_series(
         ),
         color="darkred",
     )
-    axes[1].plot([0, 20], [0, 20], c="darkred", linestyle="--")
-    axes[1].set_xlabel("Tp - Buoy [s]")
-    axes[1].set_ylabel("Tp - BinWaves [s]")
-    axes[1].set_xlim([0, 20])
-    axes[1].set_ylim([0, 20])
+    axes2[1].plot([0, 20], [0, 20], c="darkred", linestyle="--")
+    axes2[1].set_xlabel("Tp - Buoy [s]")
+    axes2[1].set_ylabel("Tp - BinWaves [s]")
+    axes2[1].set_xlim([0, 20])
+    axes2[1].set_ylim([0, 20])
+    
+    # Direction scatter plot
     dpm = np.vstack([buoy_data["Dir_Buoy"].values, binwaves_data.dpm().values])
     dpm = gaussian_kde(dpm)(dpm)
-    axes[2].scatter(
+    axes2[2].scatter(
         buoy_data["Dir_Buoy"].values,
         binwaves_data.dpm().values,
         s=1,
@@ -433,7 +479,7 @@ def plot_wave_series(
         cmap="turbo",
         label="Dpm",
     )
-    axes[2].text(
+    axes2[2].text(
         250,
         25,
         create_text_with_metrics(
@@ -441,13 +487,17 @@ def plot_wave_series(
         ),
         color="darkred",
     )
-    axes[2].plot([0, 360], [0, 360], c="darkred", linestyle="--")
-    axes[2].set_xlabel("Dir - Buoy [°]")
-    axes[2].set_ylabel("Dir - BinWaves [°]")
-    axes[2].set_xlim([0, 360])
-    axes[2].set_ylim([0, 360])
+    axes2[2].plot([0, 360], [0, 360], c="darkred", linestyle="--")
+    axes2[2].set_xlabel("Dir - Buoy [°]")
+    axes2[2].set_ylabel("Dir - BinWaves [°]")
+    axes2[2].set_xlim([0, 360])
+    axes2[2].set_ylim([0, 360])
 
-    for ax in axes:
+    # Set title for scatter plots
+    fig2.suptitle(f"{title_prefix} - Scatter Plots", fontsize=16, fontweight='bold')
+
+    # Format scatter plots
+    for ax in axes2:
         ax.set_aspect("equal")
         # Delete top and right axis
         ax.spines["top"].set_visible(False)
@@ -460,7 +510,23 @@ def plot_wave_series(
         ax.tick_params(axis="x", colors="darkred")
         ax.tick_params(axis="y", colors="darkred")
 
-    return fig, axes
+    # Save plots if requested
+    if save_plots:
+        import os
+        # Create directory if it doesn't exist
+        os.makedirs(save_path, exist_ok=True)
+        
+        # Save time series plot
+        timeseries_filename = os.path.join(save_path, f"timeseries_{title_prefix}.{format}")
+        fig1.savefig(timeseries_filename, dpi=dpi, bbox_inches='tight')
+        print(f"Time series plot saved as: {timeseries_filename}")
+        
+        # Save scatter plot
+        scatter_filename = os.path.join(save_path, f"scatter_{title_prefix}.{format}")
+        fig2.savefig(scatter_filename, dpi=dpi, bbox_inches='tight')
+        print(f"Scatter plot saved as: {scatter_filename}")
+
+    return fig1, axes1, fig2, axes2
 
 
 def create_white_zero_colormap(cmap_name="Spectral"):
