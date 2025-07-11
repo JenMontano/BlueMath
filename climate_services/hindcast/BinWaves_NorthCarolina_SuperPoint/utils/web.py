@@ -14,6 +14,7 @@ def save_validation_csv_with_interpolation(
 ):
     """
     Save validation data to CSV files, creating hourly data and interpolating to target resolution.
+    Assumes buoy_data and binwaves_* arrays are already time-aligned and of the same length.
     
     Parameters:
     -----------
@@ -41,13 +42,18 @@ def save_validation_csv_with_interpolation(
     """
     import os
     import numpy as np
-    from datetime import timedelta
-    
+    import pandas as pd
+
     print(f"Creating validation data with interpolation to {target_resolution}...")
-    
+
     # Create directory if it doesn't exist
     os.makedirs(save_path, exist_ok=True)
-    
+
+    # Check that all arrays are the same length
+    n = len(buoy_data)
+    if not (len(binwaves_hs) == len(binwaves_tp) == len(binwaves_dpm) == n):
+        raise ValueError(f"All input arrays must have the same length. Got: len(buoy_data)={n}, len(binwaves_hs)={len(binwaves_hs)}, len(binwaves_tp)={len(binwaves_tp)}, len(binwaves_dpm)={len(binwaves_dpm)}")
+
     # Create hourly DataFrame (original data)
     hourly_df = pd.DataFrame({
         'datetime': buoy_data.index,
@@ -59,17 +65,19 @@ def save_validation_csv_with_interpolation(
         'Dir_BinWaves': binwaves_dpm,
     })
     hourly_df.set_index('datetime', inplace=True)
-    
+
     # Create regular hourly time index for interpolation
     start_time = hourly_df.index.min()
     end_time = hourly_df.index.max()
-    
+
     # Create hourly time index
     hourly_times = pd.date_range(start=start_time, end=end_time, freq='1H')
-    
-    # Reindex to hourly and interpolate
-    hourly_df_interpolated = hourly_df.reindex(hourly_times).interpolate(method='linear')
-    
+
+    # Reindex to hourly and interpolate, but only for small gaps (e.g., up to 3 hours)
+    hourly_df_interpolated = hourly_df.reindex(hourly_times).interpolate(
+        method='linear', limit=3, limit_direction='both', limit_area='inside'
+    )
+
     # Create target resolution time index
     if target_resolution == "3h":
         target_times = pd.date_range(start=start_time, end=end_time, freq='3H')
@@ -80,26 +88,26 @@ def save_validation_csv_with_interpolation(
     else:
         # Default to 3h if not specified
         target_times = pd.date_range(start=start_time, end=end_time, freq='3H')
-    
+
     # Interpolate to target resolution
     target_df = hourly_df_interpolated.reindex(target_times).interpolate(method='linear')
-    
+
     # Save hourly data
     hourly_filename = f"{filename_prefix}_{buoy_id}_1h.csv"
     hourly_filepath = os.path.join(save_path, hourly_filename)
     hourly_df_interpolated.to_csv(hourly_filepath)
-    
+
     # Save target resolution data
     target_filename = f"{filename_prefix}_{buoy_id}_{target_resolution}.csv"
     target_filepath = os.path.join(save_path, target_filename)
     target_df.to_csv(target_filepath)
-    
+
     print(f"Hourly data saved as: {hourly_filepath}")
     print(f"Hourly data shape: {hourly_df_interpolated.shape}")
     print(f"Hourly time range: {hourly_df_interpolated.index.min()} to {hourly_df_interpolated.index.max()}")
-    
+
     print(f"\n{target_resolution} data saved as: {target_filepath}")
     print(f"{target_resolution} data shape: {target_df.shape}")
     print(f"{target_resolution} time range: {target_df.index.min()} to {target_df.index.max()}")
-    
+
     return hourly_filepath, target_filepath

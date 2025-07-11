@@ -528,7 +528,6 @@ def plot_wave_series(
 
     return fig1, axes1, fig2, axes2
 
-
 def create_white_zero_colormap(cmap_name="Spectral"):
     """
     Create a colormap with white at zero, and selected colormap for positive values
