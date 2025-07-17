@@ -147,6 +147,7 @@ def show_graph_for_different_parameters(pca: PCA, rbf: RBF, lhs_parameters,depth
             max=max,
             step=step,
             description=param,
+            continuous_update=False
         )
         i=i+1
 
