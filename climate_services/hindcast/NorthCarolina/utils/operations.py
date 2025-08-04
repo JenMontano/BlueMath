@@ -136,17 +136,17 @@ def locations_grid_outputs(
 
     # 4. Filter by output limits
     if outputs_limits is not None:
-        x_limits = outputs_limits.get("x")
-        y_limits = outputs_limits.get("y")
+        lon_limits = outputs_limits.get("lon")
+        lat_limits = outputs_limits.get("lat")
         mask = np.ones(len(locations), dtype=bool)
-        if x_limits is not None:
-            mask &= (locations[:, 0] >= x_limits[0]) & (locations[:, 0] <= x_limits[1])
-        if y_limits is not None:
-            y_min, y_max = y_limits
-            if y_min is not None:
-                mask &= locations[:, 1] >= y_min
-            if y_max is not None:
-                mask &= locations[:, 1] <= y_max
+        if lon_limits is not None:
+            mask &= (locations[:, 0] >= lon_limits[0]) & (locations[:, 0] <= lon_limits[1])
+        if lat_limits is not None:
+            lat_min, lat_max = lat_limits
+            if lat_min is not None:
+                mask &= locations[:, 1] >= lat_min
+            if lat_max is not None:
+                mask &= locations[:, 1] <= lat_max
         locations = locations[mask]
 
     # 5. Append buoy locations if provided (in geographic coordinates)
@@ -163,7 +163,7 @@ def transform_Offshore_spectrum(
     CAWCR_spectrum: xr.Dataset,
     subset_parameters: dict,
     available_case_num: np.ndarray,
-    satellite_correction: bool = False,
+    fix_direction: bool = False,
 ) -> xr.Dataset:
     """
     Transform the wave spectra from ERA5/CAWCAR format to binwaves format.
@@ -193,8 +193,8 @@ def transform_Offshore_spectrum(
 
     ds = CAWCR_spectrum.rename(rename_dict) if rename_dict else CAWCR_spectrum.copy()
 
-    # Spectrum directly downloaded from CAWCAR
-    if not satellite_correction:
+    # direction convention coming from or going to
+    if not fix_direction:
         ds["efth"] = ds["efth"] * np.pi / 180.0
         ds["dir"] = ds["dir"] - 180.0
         ds["dir"] = np.where(ds["dir"] < 0, ds["dir"] + 360, ds["dir"])
