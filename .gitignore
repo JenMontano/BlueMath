@@ -187,6 +187,5 @@ cython_debug/
 *inputs/
 *outputs/
 
-
 # MacOS
 *.DS_Store
