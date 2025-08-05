@@ -8,6 +8,8 @@ import pandas as pd
 import xarray as xr
 from bluemath_tk.datamining.pca import PCA
 from bluemath_tk.interpolation.rbf import RBF
+from bluemath_tk.core.plotting.scatter import plot_scatters_in_triangle
+from bluemath_tk.waves.series import waves_dispersion
 from ipywidgets import interact
 import matplotlib.cm as cm
 import matplotlib.colors as mcolors
@@ -88,7 +90,6 @@ def show_graph_for_different_parameters(pca: PCA, rbf: RBF, lhs_parameters,depth
 
         # Spatial Reconstruction
         predicted_hs = rbf.predict(dataset=df_dataset_single_case)
-
         predicted_hs_ds = xr.Dataset(
             {
                 "PCs": (["case_num", "n_component"], predicted_hs.values),
@@ -98,8 +99,6 @@ def show_graph_for_different_parameters(pca: PCA, rbf: RBF, lhs_parameters,depth
                 "n_component": np.arange(len(pca.pcs_df.columns)),
             },
         )
-
-        # Get reconstructed Hs
         ds_output_all = pca.inverse_transform(PCs=predicted_hs_ds)
 
         # Plotting
@@ -108,27 +107,16 @@ def show_graph_for_different_parameters(pca: PCA, rbf: RBF, lhs_parameters,depth
         ds_output_all["Hs"].sel(case_num=0).plot(x="Xp", ax=ax, color="k")
         depth= np.loadtxt(depthfile)
 
-        min_Nv = 0
-        max_Nv = 1000
-        norm = mcolors.Normalize(vmin=min_Nv, vmax=max_Nv)
-        cmap = cm.get_cmap('Greens')
-
-        color = cmap(norm(Nv))
+        # Improved vegetation visualization using fill_between
+        veg_start = 400 - int(Wv)
+        veg_end = 400
         
-        ax.plot(
-            np.arange(400-int(Wv),400), -depth[400-int(Wv):400],
-            color = color,
-            zorder = 3,
-            linewidth=8*hv
-        )
-        # sm.plot_depthfile(ax=ax)
-        # ax.plot(
-        #     np.arange(int(pp.swash_proj.np_ini), int(pp.swash_proj.np_fin)),
-        #     np.repeat(-2.5, int(pp.swash_proj.np_fin - pp.swash_proj.np_ini)),
-        #     color="darkgreen",
-        #     linewidth=int(25 * vegetation),
-        # )
-        #ax.set_ylim(-1, 3)
+        n_stems = int(Nv/10)  # Number of stems based on density
+        stem_positions = np.linspace(veg_start, veg_end-1, n_stems).astype(int)
+        for x in stem_positions:
+            y_base = -depth[x]
+            ax.plot([x, x], [y_base, y_base + hv], color='green', linewidth=2, alpha=0.8, zorder=4)
+
         ax.set_ylim(-12,6)
         ax.set_xlim(0, 600)
         ax.grid(True)
@@ -159,6 +147,7 @@ def show_graph_for_different_parameters(pca: PCA, rbf: RBF, lhs_parameters,depth
             max=max,
             step=step,
             description=param,
+            continuous_update=False
         )
         i=i+1
 
@@ -296,4 +285,94 @@ def plot_depthfile(depthfile, ax=None, xlim=None, dxinp=1):
     ax.spines['bottom'].set_visible(False)
     ax.spines['left'].set_visible(False)
     ax.spines['right'].set_visible(False)
+
+
+def plot_scatters_Tp(df_centroids, df_lhs_data, scatter_points_thick=10):
+    """
+    Plot peak wave period (Tp) scatter plots in triangular format.
+    
+    This function calculates the peak wave period (Tp) from significant wave height (Hs) 
+    and wave steepness (Hs_L0) using the deep water wave dispersion relation, then creates
+    scatter plots comparing different wave and vegetation parameters.
+    
+    Parameters
+    ----------
+    df_centroids : pandas.DataFrame
+        DataFrame containing centroid data with wave and vegetation parameters.
+        Expected columns: 'Hs', 'Hs_L0', 'Wv', 'hv', 'Nv'
+    df_lhs_data : pandas.DataFrame  
+        DataFrame containing Latin Hypercube Sampling data with the same parameters.
+        Expected columns: 'Hs', 'Hs_L0', 'Wv', 'hv', 'Nv'
+    scatter_points_thick : int
+    
+    Returns
+    -------
+    tuple
+        A tuple containing (fig, axes) from the triangular scatter plot
+        
+    Notes
+    -----
+    The peak wave period is calculated using the formula:
+    Tp = sqrt((Hs * 2 * π) / (g * Hs_L0))
+    
+    Where:
+    - Hs: Significant wave height (m)
+    - Hs_L0: Wave steepness (dimensionless)  
+    - g: Gravitational acceleration (9.806 m/s²)
+    
+    The function creates scatter plots with:
+    - Blue points: LHS data
+    - Red points: Centroid data
+    
+    """
+
+    # Note: The following lines should use the function parameters instead of 'mda'
+
+    df_centroids["Tp"] = np.sqrt(
+        (df_centroids["Hs"].values * 2 * np.pi) / (9.806 * df_centroids["Hs_L0"])
+    )
+    df_lhs_data["Tp"] = np.sqrt(
+        (df_lhs_data["Hs"].values * 2 * np.pi) / (9.806 * df_lhs_data["Hs_L0"])
+    )
+    df_centroids = df_centroids.drop(columns=["Hs_L0"])
+    df_lhs_data = df_lhs_data.drop(columns=["Hs_L0"])
+    df_centroids = df_centroids[["Hs", "Tp", "Wv", "hv", "Nv"]]
+    df_lhs_data = df_lhs_data[["Hs", "Tp", "Wv", "hv", "Nv"]]
+
+    fig, axes = plot_scatters_in_triangle(
+        dataframes=[df_lhs_data, df_centroids],
+        s=scatter_points_thick,
+        data_colors=["blue", "red"],
+    )
+    fig.set_size_inches(8, 8)
+
+
+def get_real_scenarios_from_dataset(lhs_dataset, h0):
+    """ 
+    Function to filter the LHS dataset to obtain real scenarios.
+    It filters out scenarios that are not physically realistic based on the wave dispersion relation.
+    Parameters
+    ----------
+    lhs_dataset : pandas.DataFrame
+        DataFrame containing the Latin Hypercube Sampling data with columns:
+        'Hs', 'Hs_L0', 'Wv', 'hv', 'Nv'
+    Returns
+    -------
+    pandas.DataFrame
+        Filtered DataFrame containing only physically realistic scenarios.
+    """
+
+    # Calculation of the wave length and other parameters to avoid unphysical values
+    df_centroids = lhs_dataset.copy()
+    df_centroids["Tp"] = np.sqrt(
+        (df_centroids["Hs"].values * 2 * np.pi) / (9.806 * df_centroids["Hs_L0"])
+    )
+    df_centroids["L"] = [waves_dispersion(i, h0)[0] for i in df_centroids["Tp"]]
+    df_centroids["h/L"] = h0 / df_centroids["L"]
+    df_centroids["kh"] = (2 * np.pi / df_centroids["L"]) * h0
+    df_centroids = df_centroids.loc[(df_centroids["kh"] < 1) & (df_centroids["Tp"] > 7)]
+    df_centroids = df_centroids.loc[(df_centroids["h/L"] < 0.5)]
+    df_dataset = lhs_dataset.loc[df_centroids.index]
+    return df_dataset
+
 
