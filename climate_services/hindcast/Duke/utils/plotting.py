@@ -858,43 +858,6 @@ def plot_spectrum_in_coastline(
                 print(f"Error plotting site {site}: {str(e)}")
                 continue
 
-        # Plot offshore spectrum
-        try:
-            # Extract offshore coordinates from the spectrum data
-            if hasattr(offshore_spectra, 'coord_x') and hasattr(offshore_spectra, 'coord_y'):
-                offshore_x = offshore_spectra.coord_x.values[0]  # Take first point or specify index
-                offshore_y = offshore_spectra.coord_y.values[0]
-            elif hasattr(offshore_spectra, 'lon') and hasattr(offshore_spectra, 'lat'):
-                offshore_x = offshore_spectra.lon.values[0]
-                offshore_y = offshore_spectra.lat.values[0]
-            else:
-                # Fallback - try to find coordinate variables
-                coord_names = list(offshore_spectra.coords)
-                x_coord_off = next((name for name in coord_names if 'x' in name.lower() or 'lon' in name.lower()), None)
-                y_coord_off = next((name for name in coord_names if 'y' in name.lower() or 'lat' in name.lower()), None)
-                offshore_x = offshore_spectra[x_coord_off].values[0]
-                offshore_y = offshore_spectra[y_coord_off].values[0]
-            
-            # Create inset at the extracted coordinates
-            inset_size = 10000  # You can adjust this size as needed
-            axoff = ax.inset_axes(
-                [offshore_x, offshore_y, inset_size, inset_size], 
-                transform=ax.transData, 
-                projection="polar"
-            )
-            axoff.pcolormesh(
-                np.deg2rad(offshore_spectra.dir.values),
-                offshore_spectra.freq.values,
-                np.sqrt(offshore_spectra.sel(time=time_to_plot, method="nearest").efth),
-                cmap=colormap_spectra(),
-            )
-            axoff.set_theta_zero_location("N", offset=0)
-            axoff.set_theta_direction(-1)
-            axoff.axis("off")
-            
-        except Exception as e:
-            print(f"Warning: Could not plot offshore spectrum: {e}")
-
         # Set reasonable axis limits based on bathymetry extent
         if is_geographic:
             ax.set_extent(
