@@ -1,7 +1,10 @@
+import pandas as pd
+import numpy as np
+
 def save_validation_csv_with_interpolation(
     buoy_data: pd.DataFrame,
     binwaves_hs: np.ndarray,
-    binwaves_tp: np.nåarray,
+    binwaves_tp: np.ndarray,
     binwaves_dpm: np.ndarray,
     buoy_id: str,
     save_path: str = "outputs",
