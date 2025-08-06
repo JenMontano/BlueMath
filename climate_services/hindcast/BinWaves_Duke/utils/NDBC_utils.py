@@ -1,87 +1,119 @@
 import os
-import pandas as pd
-import numpy as np
+from typing import Optional, Tuple, Union
+
 import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
 import xarray as xr
 
 AXIS_LABEL_SIZE = 12
 TICK_LABEL_SIZE = 10
 TEXT_SIZE = 10
 
-def convert_buoy_csv_to_pkl(csv_path, output_pkl_path):
+
+def convert_buoy_csv_to_pkl(csv_path: str, output_pkl_path: str) -> None:
     """
     Convert buoy CSV data to PKL format matching the structure of buoy_41025_bulk_parameters.pkl.
-    
-    Parameters:
-    -----------
+
+    Parameters
+    ----------
     csv_path : str
         Path to the input CSV file
     output_pkl_path : str
         Path where the PKL file will be saved
+
+    Returns
+    -------
+    None
+        Saves the converted data to a pickle file
+
+    Notes
+    -----
+    The function processes NDBC buoy data with the following columns:
+    - YYYY, MM, DD, hh, mm: Date and time components
+    - WVHT: Wave height (m)
+    - DPD: Dominant wave period (s)
+    - APD: Average wave period (s)
+    - MWD: Mean wave direction (degrees)
+
+    The output DataFrame contains:
+    - Hs_Buoy: Significant wave height (m)
+    - Tm_Buoy: Mean wave period (s)
+    - Tp_Buoy: Peak wave period (s)
+    - Dir_Buoy: Mean wave direction (degrees)
+    - Spr_Buoy: Wave spreading (NaN values)
     """
+
     # Read the CSV file
     df = pd.read_csv(csv_path)
-    
+
     # Create datetime column
-    df['datetime'] = pd.to_datetime(
-        df['YYYY'].astype(str) + '-' +
-        df['MM'].astype(str).str.zfill(2) + '-' +
-        df['DD'].astype(str).str.zfill(2) + ' ' +
-        df['hh'].astype(str).str.zfill(2) + ':' +
-        df['mm'].astype(str).str.zfill(2),
-        format='%Y-%m-%d %H:%M'
+    df["datetime"] = pd.to_datetime(
+        df["YYYY"].astype(str)
+        + "-"
+        + df["MM"].astype(str).str.zfill(2)
+        + "-"
+        + df["DD"].astype(str).str.zfill(2)
+        + " "
+        + df["hh"].astype(str).str.zfill(2)
+        + ":"
+        + df["mm"].astype(str).str.zfill(2),
+        format="%Y-%m-%d %H:%M",
     )
-    
+
     # Set datetime as index
-    df.set_index('datetime', inplace=True)
-    
+    df.set_index("datetime", inplace=True)
+
     # Drop the individual date/time columns
-    df.drop(['YYYY', 'MM', 'DD', 'hh', 'mm'], axis=1, inplace=True)
-    
+    df.drop(["YYYY", "MM", "DD", "hh", "mm"], axis=1, inplace=True)
+
     # Handle missing values in the original columns
-    for col in ['WVHT', 'DPD', 'APD', 'MWD']:
+    for col in ["WVHT", "DPD", "APD", "MWD"]:
         # Replace all known missing value codes with NaN
         df[col] = df[col].replace([99.0, 999.0, 9999.0, 999], np.nan)
-        
+
         # Wave height and periods should not be 0 or negative
-        if col in ['WVHT', 'DPD', 'APD']:
+        if col in ["WVHT", "DPD", "APD"]:
             df[col] = df[col].where(df[col] > 0, np.nan)
-        
+
         # Periods should not be greater than 25 seconds (based on reference data)
-        if col in ['DPD', 'APD']:
+        if col in ["DPD", "APD"]:
             df[col] = df[col].where(df[col] <= 25, np.nan)
-            
+
         # Direction should be between 0 and 360
-        if col == 'MWD':
+        if col == "MWD":
             df[col] = df[col].where((df[col] >= 0) & (df[col] <= 360), np.nan)
-    
+
     # Sort index before resampling
     df = df.sort_index()
-    
+
     # Resample to hourly frequency using proper NaN-aware averaging
-    df = df.resample('1H').agg({
-        'WVHT': lambda x: pd.Series.mean(x, skipna=True),
-        'DPD': lambda x: pd.Series.mean(x, skipna=True),
-        'APD': lambda x: pd.Series.mean(x, skipna=True),
-        'MWD': lambda x: pd.Series.mean(x, skipna=True)
-    })
-    
+    df = df.resample("1H").agg(
+        {
+            "WVHT": lambda x: pd.Series.mean(x, skipna=True),
+            "DPD": lambda x: pd.Series.mean(x, skipna=True),
+            "APD": lambda x: pd.Series.mean(x, skipna=True),
+            "MWD": lambda x: pd.Series.mean(x, skipna=True),
+        }
+    )
+
     # Create the final DataFrame with the exact same structure as the reference
     final_df = pd.DataFrame(index=df.index)
-    final_df['Hs_Buoy'] = df['WVHT'].astype('float64')
-    final_df['Tm_Buoy'] = df['APD'].astype('float64')
-    final_df['Tp_Buoy'] = df['DPD'].astype('float64')
-    final_df['Dir_Buoy'] = df['MWD'].astype('float64')
-    #TODO: Add Spr_Buoy or check if exists before adding nan
-    final_df['Spr_Buoy'] = np.nan  # Match reference file which has all NaN values
-    
+    final_df["Hs_Buoy"] = df["WVHT"].astype("float64")
+    final_df["Tm_Buoy"] = df["APD"].astype("float64")
+    final_df["Tp_Buoy"] = df["DPD"].astype("float64")
+    final_df["Dir_Buoy"] = df["MWD"].astype("float64")
+    # TODO: Add Spr_Buoy or check if exists before adding nan
+    final_df["Spr_Buoy"] = np.nan  # Match reference file which has all NaN values
+
     # Create the output directory if it doesn't exist
     os.makedirs(os.path.dirname(output_pkl_path), exist_ok=True)
-    
+
     # Save to pickle format
     final_df.to_pickle(output_pkl_path)
-    
+
     print(f"\nSuccessfully converted {csv_path} to {output_pkl_path}")
+
 
 def plot_bulk_timeseries(df: pd.DataFrame) -> plt.Figure:
     """
@@ -91,7 +123,8 @@ def plot_bulk_timeseries(df: pd.DataFrame) -> plt.Figure:
     ----------
     df : pd.DataFrame
         DataFrame containing wave parameters with the following columns:
-        - datetime: datetime index
+        - datetime: datetime index (optional, will be created if not present)
+        - YYYY, MM, DD, hh, mm: Date and time components (if datetime not present)
         - WVHT: Wave height (m)
         - DPD: Dominant wave period (s)
         - APD: Average wave period (s)
@@ -100,7 +133,17 @@ def plot_bulk_timeseries(df: pd.DataFrame) -> plt.Figure:
     Returns
     -------
     plt.Figure
-        Figure object containing the plot.
+        Figure object containing the plot with three subplots:
+        - Wave height time series
+        - Wave period time series
+        - Wave direction time series
+
+    Notes
+    -----
+    The function automatically handles missing values by replacing common
+    NDBC missing value codes (99.0, 999.0) with NaN. It also applies
+    physical constraints to the data (positive wave heights/periods,
+    periods <= 30s, directions 0-360°).
     """
 
     colors = ["plum"]
@@ -230,6 +273,7 @@ def plot_bulk_timeseries(df: pd.DataFrame) -> plt.Figure:
     plt.tight_layout()
     return fig
 
+
 def calculate_directional_spectrum(
     C11: np.ndarray,
     freq: np.ndarray,
@@ -237,35 +281,45 @@ def calculate_directional_spectrum(
     alpha2: np.ndarray,
     r1: np.ndarray,
     r2: np.ndarray,
-    angles_deg: np.ndarray = None,  # NEW: optional, in degrees
-    freq_grid: np.ndarray = None  # NEW: optional, overrides freq mesh
-) -> tuple:
+    angles_deg: Optional[np.ndarray] = None,
+    freq_grid: Optional[np.ndarray] = None,
+) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     Calculate normalized directional wave spectrum.
 
     Parameters
     ----------
     C11 : np.ndarray
-        Wave energy spectrum
+        Wave energy spectrum (1D array)
     freq : np.ndarray
-        Frequency array
+        Frequency array (1D array)
     alpha1 : np.ndarray
-        Primary direction array
+        Primary direction array in degrees (1D array)
     alpha2 : np.ndarray
-        Secondary direction array
+        Secondary direction array in degrees (1D array)
     r1 : np.ndarray
-        Primary spreading parameter array
+        Primary spreading parameter array (1D array)
     r2 : np.ndarray
-        Secondary spreading parameter array
+        Secondary spreading parameter array (1D array)
     angles_deg : np.ndarray, optional
-        Array of directions in degrees (default: 360 evenly spaced)
+        Array of directions in degrees (default: 360 evenly spaced from 0 to 360)
     freq_grid : np.ndarray, optional
-        Array of frequencies for meshgrid (default: freq)
+        Array of frequencies for meshgrid (default: uses freq parameter)
 
     Returns
     -------
     Tuple[np.ndarray, np.ndarray, np.ndarray]
-        Tuple containing (E, freq_mesh, angle_mesh)
+        Tuple containing:
+        - E: Directional spectrum (2D array, shape: n_directions x n_frequencies)
+        - freq_mesh: Frequency meshgrid (2D array)
+        - angle_mesh: Angle meshgrid in radians (2D array)
+
+    Notes
+    -----
+    The directional spectrum is calculated using a Fourier series expansion
+    with primary and secondary directional components. The spreading parameters
+    r1 and r2 are normalized by dividing by 100. The resulting spectrum is
+    normalized to ensure proper energy conservation.
     """
 
     if angles_deg is None:
@@ -296,11 +350,67 @@ def calculate_directional_spectrum(
 
 
 def save_full_spectrum_from_dataframes(
-    alpha1_df, alpha2_df, r1_df, r2_df, c11_df, 
-    output_path, latitude, longitude, depth=None, station=None, directions=None, frequencies=None
-):
+    alpha1_df: pd.DataFrame,
+    alpha2_df: pd.DataFrame,
+    r1_df: pd.DataFrame,
+    r2_df: pd.DataFrame,
+    c11_df: pd.DataFrame,
+    output_path: str,
+    latitude: Union[float, np.ndarray],
+    longitude: Union[float, np.ndarray],
+    depth: Optional[Union[float, np.ndarray]] = None,
+    station: Optional[str] = None,
+    directions: Optional[np.ndarray] = None,
+    frequencies: Optional[np.ndarray] = None,
+) -> xr.Dataset:
     """
     Save full spectrum from dataframes to NetCDF format, with optional custom direction and frequency grid.
+
+    Parameters
+    ----------
+    alpha1_df : pd.DataFrame
+        DataFrame containing primary direction data (time x frequency)
+    alpha2_df : pd.DataFrame
+        DataFrame containing secondary direction data (time x frequency)
+    r1_df : pd.DataFrame
+        DataFrame containing primary spreading parameter data (time x frequency)
+    r2_df : pd.DataFrame
+        DataFrame containing secondary spreading parameter data (time x frequency)
+    c11_df : pd.DataFrame
+        DataFrame containing wave energy spectrum data (time x frequency)
+    output_path : str
+        Path where the NetCDF file will be saved
+    latitude : float or np.ndarray
+        Latitude coordinate(s)
+    longitude : float or np.ndarray
+        Longitude coordinate(s)
+    depth : float or np.ndarray, optional
+        Depth coordinate(s)
+    station : str, optional
+        Station identifier
+    directions : np.ndarray, optional
+        Custom direction array in degrees (default: 360 evenly spaced from 0 to 360)
+    frequencies : np.ndarray, optional
+        Custom frequency array (default: uses DataFrame columns)
+
+    Returns
+    -------
+    xr.Dataset
+        Dataset containing the directional wave spectrum with coordinates:
+        - time: Time coordinates
+        - direction: Direction coordinates in degrees
+        - frequency: Frequency coordinates in Hz
+        - latitude: Latitude coordinate
+        - longitude: Longitude coordinate
+        - depth: Depth coordinate (if provided)
+        - station: Station identifier (if provided)
+
+    Notes
+    -----
+    The function processes time series of directional wave spectra and saves
+    them in NetCDF format. The spectral energy density (efth) has units of
+    m²/Hz/deg. The function automatically creates the output directory if
+    it doesn't exist.
     """
 
     time_coords = alpha1_df.index.to_numpy()
@@ -353,7 +463,7 @@ def save_full_spectrum_from_dataframes(
         "direction": directions,
         "frequency": frequency_coords,
         "latitude": latitude,
-        "longitude": longitude
+        "longitude": longitude,
     }
     if depth is not None:
         coords["depth"] = depth
@@ -361,10 +471,7 @@ def save_full_spectrum_from_dataframes(
         coords["station"] = station
 
     ds = xr.Dataset(
-        data_vars={
-            "efth": (("time", "direction", "frequency"), efth)
-        },
-        coords=coords
+        data_vars={"efth": (("time", "direction", "frequency"), efth)}, coords=coords
     )
     ds.efth.attrs["units"] = "m2/Hz/deg"
     ds.efth.attrs["long_name"] = "Spectral energy density"
@@ -378,4 +485,5 @@ def save_full_spectrum_from_dataframes(
     os.makedirs(os.path.dirname(output_path), exist_ok=True)
     ds.to_netcdf(output_path)
     print(f"Saved spectrum to {output_path}")
+
     return ds

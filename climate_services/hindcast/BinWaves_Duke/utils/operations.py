@@ -1,71 +1,108 @@
+from typing import Any, Dict, List, Optional, Tuple, Union
+
 import numpy as np
 import xarray as xr
-import numpy as np
-from pyproj import Transformer
-#TODO: Check if these functions work for UTM coordinates.
-def calculate_initial_grid_parameters(lonA, latA, lonB, latB, lonC, latC, padding_degrees=0.0):
+
+
+def calculate_initial_grid_parameters(
+    lonA: float,
+    latA: float,
+    lonB: float,
+    latB: float,
+    lonC: float,
+    latC: float,
+    padding_degrees: float = 0.0,
+) -> Tuple[float, float, float, float, float]:
     """
     Calculate initial grid parameters from three points using simple Cartesian approximation.
-    
+
     Parameters
     ----------
-    lonA, latA : float
-        Origin point coordinates
-    lonB, latB : float
-        Point along x-axis coordinates
-    lonC, latC : float
-        Far corner point coordinates
+    lonA : float
+        Origin point longitude coordinate.
+    latA : float
+        Origin point latitude coordinate.
+    lonB : float
+        Point along x-axis longitude coordinate.
+    latB : float
+        Point along x-axis latitude coordinate.
+    lonC : float
+        Far corner point longitude coordinate.
+    latC : float
+        Far corner point latitude coordinate.
     padding_degrees : float, optional
         Padding to add around the grid in all directions (in degrees).
         Default is 0.0 (no padding). Use ~0.1 for ~11km buffer.
+
+    Returns
+    -------
+    xpc : float
+        Grid origin x-coordinate (longitude).
+    ypc : float
+        Grid origin y-coordinate (latitude).
+    alpc : float
+        Grid rotation angle in degrees.
+    xlenc : float
+        Grid length in x-direction (degrees).
+    ylenc : float
+        Grid length in y-direction (degrees).
+
+    Notes
+    -----
+    Uses simple Cartesian calculations (no UTM transformation).
+    This matches SWAN's approach which treats coordinates as flat.
     """
-    
+
     # Use simple Cartesian calculations (no UTM transformation)
     # This matches SWAN's approach which treats coordinates as flat
-    
+
     # Vector AB (treating coordinates as Cartesian)
     dx_AB = lonB - lonA
     dy_AB = latB - latA
     length_AB = np.sqrt(dx_AB**2 + dy_AB**2)
     ux = dx_AB / length_AB
     uy = dy_AB / length_AB
-    
+
     # Vector AC
     dx_AC = lonC - lonA
     dy_AC = latC - latA
-    
+
     # Vector BC
     dx_BC = lonC - lonB
     dy_BC = latC - latB
-    
+
     # Rotation angle using simple atan2 (Cartesian approach)
     alpc = np.degrees(np.arctan2(dy_AB, dx_AB))
-    
+
     # Perpendicular vector to AB
     vx = -uy
     vy = ux
-    
+
     xlenc1 = length_AB  # Distance from A to B
     xlenc2 = dx_BC * ux + dy_BC * uy  # Projection of BC onto AB direction
     xlenc = xlenc1 + xlenc2
-    
+
     # ylenc: perpendicular distance from C to AB line (in degrees)
     ylenc = abs(dx_AC * vx + dy_AC * vy)
-    
+
     # Apply padding if specified
     if padding_degrees > 0:
         # Convert angle to radians for calculations
         angle_rad = np.radians(alpc)
-        
+
         # Calculate displacement vector for moving origin backwards by padding amount
         # We need to move back in both the x and y directions of the rotated grid
-        dx_back = -padding_degrees * np.cos(angle_rad) - padding_degrees * np.sin(angle_rad) 
-        dy_back = padding_degrees * np.sin(angle_rad) - padding_degrees * np.cos(angle_rad)
-        
+        dx_back = -padding_degrees * np.cos(angle_rad) - padding_degrees * np.sin(
+            angle_rad
+        )
+        dy_back = padding_degrees * np.sin(angle_rad) - padding_degrees * np.cos(
+            angle_rad
+        )
+
         # New origin (moved backwards by padding amount)
         xpc = lonA + dx_back
         ypc = latA + dy_back
-        
+
         # New grid lengths (add padding to both ends)
         xlenc = xlenc + 2 * padding_degrees
         ylenc = ylenc + 2 * padding_degrees
@@ -73,34 +110,68 @@ def calculate_initial_grid_parameters(lonA, latA, lonB, latB, lonC, latC, paddin
         # Set grid origin (same as input)
         xpc = lonA
         ypc = latA
-    
+
     return xpc, ypc, alpc, xlenc, ylenc
 
+
 def locations_grid_outputs(
-    grid_parameters,
-    out_dx=None,
-    out_dy=None,
-    outputs_limits=None,
-    buoy_locations=None,
-):
+    grid_parameters: Dict[str, Union[float, int]],
+    out_dx: Optional[float] = None,
+    out_dy: Optional[float] = None,
+    outputs_limits: Optional[Dict[str, Tuple[Optional[float], Optional[float]]]] = None,
+    buoy_locations: Optional[
+        Union[Dict[str, Tuple[float, float]], List[Tuple[float, float]], np.ndarray]
+    ] = None,
+) -> np.ndarray:
     """
-    Generate a output grid (accounting for grid rotation)
+    Generate an output grid accounting for grid rotation.
 
     Parameters
     ----------
     grid_parameters : dict
-        Must contain xpc, ypc, xlenc, ylenc, alpc, mxc, myc.
-    out_dx, out_dy : float
-        Output grid spacing in degrees.
+        Dictionary containing grid parameters. Must contain keys:
+        - xpc : float
+            Grid origin x-coordinate (longitude).
+        - ypc : float
+            Grid origin y-coordinate (latitude).
+        - xlenc : float
+            Grid length in x-direction (degrees).
+        - ylenc : float
+            Grid length in y-direction (degrees).
+        - alpc : float
+            Grid rotation angle in degrees.
+        - mxc : int
+            Number of grid cells in x-direction.
+        - myc : int
+            Number of grid cells in y-direction.
+    out_dx : float, optional
+        Output grid spacing in x-direction (degrees).
+        If None, calculated from xlenc / mxc.
+    out_dy : float, optional
+        Output grid spacing in y-direction (degrees).
+        If None, calculated from ylenc / myc.
     outputs_limits : dict, optional
-        Dictionary with 'lon' and/or 'lat' keys for min/max filtering.
+        Dictionary with filtering limits:
+        - 'lon' : tuple of (min_lon, max_lon), optional
+            Longitude limits for filtering.
+        - 'lat' : tuple of (min_lat, max_lat), optional
+            Latitude limits for filtering.
     buoy_locations : dict or array-like, optional
         Buoy locations to append (in lon, lat).
+        Can be:
+        - dict: {buoy_id: (lon, lat)}
+        - list: [(lon1, lat1), (lon2, lat2), ...]
+        - numpy array: shape (N, 2) with (lon, lat) pairs
 
     Returns
     -------
-    locations : ndarray, shape (N,2)
-        Array of output locations (lon, lat).
+    locations : ndarray
+        Array of output locations with shape (N, 2) where each row is (lon, lat).
+
+    Notes
+    -----
+    The function creates a regular grid in computational space, applies rotation
+    and translation, then filters by limits and appends buoy locations if provided.
     """
 
     alpc = grid_parameters.get("alpc")
@@ -140,7 +211,9 @@ def locations_grid_outputs(
         lat_limits = outputs_limits.get("lat")
         mask = np.ones(len(locations), dtype=bool)
         if lon_limits is not None:
-            mask &= (locations[:, 0] >= lon_limits[0]) & (locations[:, 0] <= lon_limits[1])
+            mask &= (locations[:, 0] >= lon_limits[0]) & (
+                locations[:, 0] <= lon_limits[1]
+            )
         if lat_limits is not None:
             lat_min, lat_max = lat_limits
             if lat_min is not None:
@@ -158,13 +231,14 @@ def locations_grid_outputs(
         locations = np.vstack((locations, buoy_coords))
 
     return locations
-    
+
+
 def transform_Offshore_spectrum(
     CAWCR_spectrum: xr.Dataset,
-    subset_parameters: dict,
+    subset_parameters: Dict[str, Any],
     available_case_num: np.ndarray,
     fixed_direction: bool = False,
-) -> xr.Dataset:
+) -> Tuple[xr.Dataset, xr.Dataset]:
     """
     Transform the wave spectra from ERA5/CAWCAR format to binwaves format.
 
@@ -172,15 +246,33 @@ def transform_Offshore_spectrum(
     ----------
     CAWCR_spectrum : xr.Dataset
         The wave spectra dataset in ERA5/CAWCAR format.
+        Must contain 'efth' variable and 'frequency'/'freq' and 'direction'/'dir' dimensions.
     subset_parameters : dict
         A dictionary containing parameters for the subset processing.
-    available_case_num : np.ndarray
-        The available case numbers.
+        Must contain:
+        - 'dir' : array-like
+            Direction values for each case.
+        - 'freq' : array-like
+            Frequency values for each case.
+    available_case_num : ndarray
+        The available case numbers to process.
+    fixed_direction : bool, optional
+        If True, skip direction convention transformation.
+        Default is False.
 
     Returns
     -------
-    xr.Dataset
-        The wave spectra dataset in binwaves format.
+    ds : xr.Dataset
+        The transformed wave spectra dataset with renamed dimensions.
+    ds_case_num : xr.Dataset
+        The wave spectra dataset in binwaves format with case_num dimension.
+
+    Notes
+    -----
+    The function performs two main transformations:
+    1. Renames dimensions from 'frequency'/'direction' to 'freq'/'dir' if needed
+    2. Converts direction convention (unless fixed_direction=True)
+    3. Projects spectra onto available case numbers
     """
 
     # First, reproject the wave spectra to the binwaves format
@@ -226,5 +318,3 @@ def transform_Offshore_spectrum(
     )
 
     return ds, ds_case_num
-
-

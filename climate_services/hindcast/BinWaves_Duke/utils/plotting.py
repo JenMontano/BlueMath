@@ -1,3 +1,5 @@
+from typing import Any, Dict, List, Optional, Tuple, Union
+
 import cartopy.crs as ccrs
 import cartopy.feature as cfeature
 import matplotlib.pyplot as plt
@@ -7,64 +9,102 @@ import xarray as xr
 from bluemath_tk.core.operations import get_uv_components
 from bluemath_tk.core.plotting.colors import colormap_spectra
 from matplotlib import colors
+from matplotlib.axes import Axes
+from matplotlib.colors import LinearSegmentedColormap
+from matplotlib.figure import Figure
 from scipy.stats import gaussian_kde
 
-def safe_gaussian_kde(x_data, y_data):
+
+def safe_gaussian_kde(x_data: np.ndarray, y_data: np.ndarray) -> np.ndarray:
     """
     Create a Gaussian KDE that handles NaN values properly.
-    
-    Parameters:
-    -----------
-    x_data : array-like
+
+    Parameters
+    ----------
+    x_data : np.ndarray
         First dataset (e.g., buoy data)
-    y_data : array-like  
+    y_data : np.ndarray
         Second dataset (e.g., model data)
-        
-    Returns:
-    --------
-    array
+
+    Returns
+    -------
+    np.ndarray
         KDE values for the data points, or uniform values if KDE fails
     """
+
     try:
         # Stack the data and remove NaN values
         combined_data = np.vstack([x_data, y_data])
-        
+
         # Create mask for finite values only
         finite_mask = np.isfinite(combined_data).all(axis=0)
-        
+
         if finite_mask.sum() < 2:  # Need at least 2 points for KDE
-            print("Warning: Insufficient finite data points for KDE, using uniform coloring")
+            print(
+                "Warning: Insufficient finite data points for KDE, using uniform coloring"
+            )
             return np.ones_like(x_data)
-        
+
         # Filter to finite values only
         finite_data = combined_data[:, finite_mask]
-        
+
         # Create KDE with finite data only
         kde = gaussian_kde(finite_data)
-        
+
         # Evaluate KDE on all original data points, but only where both are finite
         result = np.ones_like(x_data)  # Default to uniform
         finite_xy_mask = np.isfinite(x_data) & np.isfinite(y_data)
-        
+
         if finite_xy_mask.sum() > 0:
-            finite_combined = np.vstack([x_data[finite_xy_mask], y_data[finite_xy_mask]])
+            finite_combined = np.vstack(
+                [x_data[finite_xy_mask], y_data[finite_xy_mask]]
+            )
             result[finite_xy_mask] = kde(finite_combined)
-            
+
         return result
-        
+
     except Exception as e:
         print(f"Warning: KDE creation failed ({e}), using uniform coloring")
         return np.ones_like(x_data)
 
-def axplot_spectrum(ax, x, y, z, vmax=None, ylim=0.49, cmap='magma', plot_center=False):
-    '''
-    Plots spectrum in given polar axes
 
-    ax - input axes (polar)
-    x  - spectrum directions
-    y  - spectrum frequency
-    z  - spectrum energy
-    '''
+def axplot_spectrum(
+    ax: Axes,
+    x: np.ndarray,
+    y: np.ndarray,
+    z: np.ndarray,
+    vmax: Optional[float] = None,
+    ylim: float = 0.49,
+    cmap: str = "magma",
+    plot_center: bool = False,
+) -> Any:
+    """
+    Plot spectrum in given polar axes.
+
+    Parameters
+    ----------
+    ax : Axes
+        Input axes (polar)
+    x : np.ndarray
+        Spectrum directions
+    y : np.ndarray
+        Spectrum frequency
+    z : np.ndarray
+        Spectrum energy
+    vmax : float, optional
+        Maximum value for color scale. If None, calculated from data
+    ylim : float, optional
+        Y-axis limit, by default 0.49
+    cmap : str, optional
+        Colormap name, by default 'magma'
+    plot_center : bool, optional
+        Whether to plot center point, by default False
+
+    Returns
+    -------
+    Any
+        Matplotlib pcolormesh object
+    """
 
     # fix coordinates for pcolormesh
     x1 = np.append(x, x[0])
@@ -80,48 +120,84 @@ def axplot_spectrum(ax, x, y, z, vmax=None, ylim=0.49, cmap='magma', plot_center
         if vmax == 0:  # Handle cases with no energy
             vmax = 0.1
 
-    # polar pcolormesh
+    # polar pcolormesh
     p1 = ax.pcolormesh(
-        x1, y1, np.sqrt(z1),
-        vmin = 0, vmax = vmax,
+        x1,
+        y1,
+        np.sqrt(z1),
+        vmin=0,
+        vmax=vmax,
     )
 
     # polar axes configuration
     p1.set_cmap(cmap)
-    ax.set_theta_zero_location('N', offset = 0)
+    ax.set_theta_zero_location("N", offset=0)
     ax.set_theta_direction(-1)
     ax.set_ylim(0, ylim)
 
     return p1
 
 
-def Plot_spectrum(sp, time_ix=0, average=False, ylim=0.49, figsize = [8, 8], title=''):
-    '''
-    Plots superpoint spectrum at a time index or time average
+def Plot_spectrum(
+    sp: Union[xr.Dataset, xr.DataArray],
+    time_ix: int = 0,
+    average: bool = False,
+    ylim: float = 0.49,
+    figsize: List[int] = [8, 8],
+    title: str = "",
+) -> Figure:
+    """
+    Plot superpoint spectrum at a time index or time average.
 
-    sp      - spectrum dataset
-    time_ix - time index, instant to plot
-    average - True to plot energy average
-    title  - title of the plot
-    '''
+    Parameters
+    ----------
+    sp : Union[xr.Dataset, xr.DataArray]
+        Spectrum dataset
+    time_ix : int, optional
+        Time index, instant to plot, by default 0
+    average : bool, optional
+        True to plot energy average, by default False
+    ylim : float, optional
+        Y-axis limit, by default 0.49
+    figsize : List[int], optional
+        Figure size, by default [8, 8]
+    title : str, optional
+        Title of the plot, by default ''
+
+    Returns
+    -------
+    Figure
+        Matplotlib figure object
+
+    Raises
+    ------
+    ValueError
+        If direction or frequency coordinates are not found
+    TypeError
+        If input is not an xarray Dataset or DataArray
+    """
 
     # Detect direction coordinate name
     dir_coord_name = None
-    if 'dir' in sp.coords:
-        dir_coord_name = 'dir'
-    elif 'direction' in sp.coords:
-        dir_coord_name = 'direction'
+    if "dir" in sp.coords:
+        dir_coord_name = "dir"
+    elif "direction" in sp.coords:
+        dir_coord_name = "direction"
     else:
-        raise ValueError(f"Direction coordinate not found. Available coordinates: {list(sp.coords.keys())}")
+        raise ValueError(
+            f"Direction coordinate not found. Available coordinates: {list(sp.coords.keys())}"
+        )
 
     # Detect frequency coordinate name
     freq_coord_name = None
-    if 'freq' in sp.coords:
-        freq_coord_name = 'freq'
-    elif 'frequency' in sp.coords:
-        freq_coord_name = 'frequency'
+    if "freq" in sp.coords:
+        freq_coord_name = "freq"
+    elif "frequency" in sp.coords:
+        freq_coord_name = "frequency"
     else:
-        raise ValueError(f"Frequency coordinate not found. Available coordinates: {list(sp.coords.keys())}")
+        raise ValueError(
+            f"Frequency coordinate not found. Available coordinates: {list(sp.coords.keys())}"
+        )
 
     # Handle both Dataset and DataArray inputs for 'sp' to make the function more flexible
     if isinstance(sp, xr.Dataset):
@@ -131,12 +207,14 @@ def Plot_spectrum(sp, time_ix=0, average=False, ylim=0.49, figsize = [8, 8], tit
         # If it's a data array, use its values directly
         data_values = sp.values
     else:
-        raise TypeError(f"Input 'sp' must be an xarray Dataset or DataArray, not {type(sp)}")
+        raise TypeError(
+            f"Input 'sp' must be an xarray Dataset or DataArray, not {type(sp)}"
+        )
 
     # superpoint spectrum energy (time index or time average)
     if not average:
         z = data_values[time_ix, :, :]
-        ttl = title + ' - time: {0}'.format(sp.time[time_ix].values)
+        ttl = title + " - time: {0}".format(sp.time[time_ix].values)
 
     else:
         # time average
@@ -144,30 +222,37 @@ def Plot_spectrum(sp, time_ix=0, average=False, ylim=0.49, figsize = [8, 8], tit
         ttl = title
 
     # generate figure
-    fig = plt.figure(figsize = figsize)
-    ax = fig.add_subplot(1,1,1, projection = 'polar')
-    #TODO: Check why the super point isn't doing the angle correction amd if the efth also need to be corrected
+    fig = plt.figure(figsize=figsize)
+    ax = fig.add_subplot(1, 1, 1, projection="polar")
+    # TODO: Check why the super point isn't doing the angle correction amd if the efth also need to be corrected
     # sp[dir_coord_name] = fix_dir(sp[dir_coord_name])
     # plot spectrum
-    axplot_spectrum(ax, np.deg2rad(sp[dir_coord_name].values), sp[freq_coord_name].values, z, ylim=ylim)
-    ax.set_title(ttl, fontsize=14);
+    axplot_spectrum(
+        ax,
+        np.deg2rad(sp[dir_coord_name].values),
+        sp[freq_coord_name].values,
+        z,
+        ylim=ylim,
+    )
+    ax.set_title(ttl, fontsize=14)
 
     return fig
 
-def detect_coordinate_system(bathy):
+
+def detect_coordinate_system(bathy: Union[xr.DataArray, xr.Dataset]) -> Dict[str, Any]:
     """
     Detect the coordinate system and extract coordinate variables from bathymetry data.
 
     Parameters
     ----------
-    bathy : xr.DataArray or xr.Dataset
+    bathy : Union[xr.DataArray, xr.Dataset]
         Input bathymetry data with coordinates. Expected to have either:
         - lon/lat coordinates (geographic)
         - x/y coordinates (UTM)
 
     Returns
     -------
-    dict
+    Dict[str, Any]
         Dictionary containing:
         - is_geographic: bool, whether the coordinates are geographic
         - x_coord: str, name of x coordinate
@@ -207,7 +292,12 @@ def detect_coordinate_system(bathy):
     }
 
 
-def plot_selected_bathy(bathy: xr.DataArray, utm_zone=None, buoys=None, ax=None):
+def plot_selected_bathy(
+    bathy: xr.DataArray,
+    utm_zone: Optional[int] = None,
+    buoys: Optional[Dict[str, Tuple[float, float]]] = None,
+    ax: Optional[Axes] = None,
+) -> None:
     """
     Plot bathymetry data in either UTM or geographic coordinates.
 
@@ -219,11 +309,16 @@ def plot_selected_bathy(bathy: xr.DataArray, utm_zone=None, buoys=None, ax=None)
         - x/y coordinates (UTM)
     utm_zone : int, optional
         UTM zone number if data is in UTM coordinates
-    buoys : dict, optional
+    buoys : Dict[str, Tuple[float, float]], optional
         Dictionary of buoy names and their coordinates
         Example: {'NDBC-41001': (x1, y1), 'NDBC-41002': (x2, y2)}
-    ax : matplotlib Axes, optional
+    ax : Axes, optional
         Axes to plot on. If None, a new figure and axes will be created.
+
+    Raises
+    ------
+    ValueError
+        If UTM zone is not provided for UTM coordinates
     """
 
     # Get coordinate variables
@@ -300,11 +395,28 @@ def plot_selected_bathy(bathy: xr.DataArray, utm_zone=None, buoys=None, ax=None)
 
 def plot_cases_grid(
     data: xr.DataArray,
-    cases_to_plot: list = [0, 320, 615],
-    colors_to_plot: list = ["green", "orange", "purple"],
+    cases_to_plot: List[int] = [0, 320, 615],
+    colors_to_plot: List[str] = ["green", "orange", "purple"],
     num_directions: int = 24,
     num_frequencies: int = 29,
-):
+) -> None:
+    """
+    Plot all cases in a grid and selected cases with colored borders.
+
+    Parameters
+    ----------
+    data : xr.DataArray
+        Data array containing case data
+    cases_to_plot : List[int], optional
+        List of case numbers to highlight, by default [0, 320, 615]
+    colors_to_plot : List[str], optional
+        List of colors for highlighted cases, by default ["green", "orange", "purple"]
+    num_directions : int, optional
+        Number of directions, by default 24
+    num_frequencies : int, optional
+        Number of frequencies, by default 29
+    """
+
     # Plot all cases in a grid
     fig, axes = plt.subplots(
         ncols=num_frequencies, nrows=num_directions, figsize=(29, 15)
@@ -397,17 +509,29 @@ def plot_case_variables(
     vmax_tm: float = 20,
     vmin_dir: float = 0,
     vmax_dir: float = 360,
-):
+) -> None:
     """
     Plot the significant wave height, mean wave period, and wave direction from the dataset.
-    Parameters:
-    - data: xr.Dataset containing the wave data with variables 'Hsig', 'Tm02', and 'Dir'.
-    - step: int, step size for quiver plot.
-    - vmin_hs, vmax_hs: float, min and max values for significant wave height.
-    - vmin_tm, vmax_tm: float, min and max values for mean wave period.
-    - vmin_dir, vmax_dir: float, min and max values for wave direction.
-    """
 
+    Parameters
+    ----------
+    data : xr.Dataset
+        Dataset containing the wave data with variables 'Hsig', 'Tm02', and 'Dir'
+    step : int, optional
+        Step size for quiver plot, by default 10
+    vmin_hs : float, optional
+        Minimum value for significant wave height, by default 0
+    vmax_hs : float, optional
+        Maximum value for significant wave height, by default 1.5
+    vmin_tm : float, optional
+        Minimum value for mean wave period, by default 0
+    vmax_tm : float, optional
+        Maximum value for mean wave period, by default 20
+    vmin_dir : float, optional
+        Minimum value for wave direction, by default 0
+    vmax_dir : float, optional
+        Maximum value for wave direction, by default 360
+    """
     fig, axes = plt.subplots(1, 3, figsize=(20, 4))
     data["Hsig"].plot(
         ax=axes[0],
@@ -447,44 +571,51 @@ def plot_case_variables(
     fig.tight_layout()
 
 
-def create_text_with_metrics(array1: np.ndarray, array2: np.ndarray):
+def create_text_with_metrics(array1: np.ndarray, array2: np.ndarray) -> str:
     """
     Create a text with metrics comparing two arrays, handling NaN values.
     Includes dispersion coefficients commonly used in wave validation.
-    
-    Parameters:
-    -----------
+
+    Parameters
+    ----------
     array1 : np.ndarray
         Observed data (e.g., buoy measurements)
-    array2 : np.ndarray  
+    array2 : np.ndarray
         Model data (e.g., BinWaves predictions)
+
+    Returns
+    -------
+    str
+        Formatted text string with metrics (MAE, RMSE, R², SI, Bias)
     """
-    
+
     # Create mask for finite values in both arrays
     finite_mask = np.isfinite(array1) & np.isfinite(array2)
-    
+
     if finite_mask.sum() < 2:  # Need at least 2 points for correlation
         return "MAE: nan\nRMSE: nan\nR²: nan\nSI: nan\nBias: nan"
-    
+
     # Filter to finite values only
     obs_clean = array1[finite_mask]  # observations (buoy)
     model_clean = array2[finite_mask]  # model (BinWaves)
-    
+
     # Calculate standard metrics
     mae = np.mean(np.abs(obs_clean - model_clean))
     rmse = np.sqrt(np.mean((obs_clean - model_clean) ** 2))
     r2 = np.corrcoef(obs_clean, model_clean)[0, 1] ** 2
-    
+
     # Calculate dispersion coefficients
     bias = np.mean(model_clean - obs_clean)  # Mean bias (positive = model overestimate)
     scatter_index = rmse / np.mean(obs_clean)  # Normalized RMSE (SI)
-    
+
     # Create text with additional metrics
-    text = (f"MAE: {mae:.2f}\n"
-            f"RMSE: {rmse:.2f}\n" 
-            f"R²: {r2:.2f}\n"
-            f"SI: {scatter_index:.2f}\n"
-            f"Bias: {bias:.2f}")
+    text = (
+        f"MAE: {mae:.2f}\n"
+        f"RMSE: {rmse:.2f}\n"
+        f"R²: {r2:.2f}\n"
+        f"SI: {scatter_index:.2f}\n"
+        f"Bias: {bias:.2f}"
+    )
 
     return text
 
@@ -499,12 +630,12 @@ def plot_wave_series(
     title_prefix: str = "Wave Validation",
     dpi: int = 300,
     format: str = "png",
-):
+) -> Tuple[Figure, np.ndarray, Figure, np.ndarray]:
     """
     Plot wave series comparison between buoy, BinWaves, and offshore data.
-    
-    Parameters:
-    -----------
+
+    Parameters
+    ----------
     buoy_data : wavespectra.SpecArray
         Buoy wave data
     binwaves_data : wavespectra.SpecArray
@@ -514,28 +645,29 @@ def plot_wave_series(
     times : np.ndarray
         Time array for plotting
     save_plots : bool, optional
-        Whether to save the plots to files (default: False)
+        Whether to save the plots to files, by default False
     save_path : str, optional
-        Base path for saving plots (default: "wave_validation_plots")
+        Base path for saving plots, by default "wave_validation_plots"
     title_prefix : str, optional
-        Prefix for plot titles (default: "Wave Validation")
+        Prefix for plot titles, by default "Wave Validation"
     dpi : int, optional
-        DPI for saved plots (default: 300)
+        DPI for saved plots, by default 300
     format : str, optional
-        Format for saved plots (default: "png")
-    
-    Returns:
-    --------
-    tuple
+        Format for saved plots, by default "png"
+
+    Returns
+    -------
+    Tuple[Figure, np.ndarray, Figure, np.ndarray]
         (fig1, axes1, fig2, axes2) - Both figure and axes objects
     """
+
     buoy_color = "lightcoral"
     binwaves_color = "royalblue"
-    offshore_color = "gold"
+    # offshore_color = "gold"
 
     # Create first figure: Time series plots
     fig1, axes1 = plt.subplots(3, 1, figsize=(20, 10))
-    
+
     # Plot time series
     buoy_data["Hs_Buoy"].plot(ax=axes1[0], label="Buoy", c=buoy_color, alpha=0.8, lw=1)
     buoy_data["Tp_Buoy"].plot(ax=axes1[1], label="Buoy", c=buoy_color, alpha=0.8, lw=1)
@@ -577,7 +709,7 @@ def plot_wave_series(
     # )
 
     # Set labels and title for time series
-    fig1.suptitle(f"{title_prefix} - Time Series", fontsize=16, fontweight='bold')
+    fig1.suptitle(f"{title_prefix} - Time Series", fontsize=16, fontweight="bold")
     axes1[0].set_ylabel("Hs [m]")
     axes1[0].legend()
     axes1[1].set_ylabel("T [s] - tp")
@@ -588,9 +720,11 @@ def plot_wave_series(
 
     # Create second figure: Scatter plots
     fig2, axes2 = plt.subplots(1, 3, figsize=(15, 5))
-    
+
     # Hs scatter plot
-    hs_colors = safe_gaussian_kde(buoy_data["Hs_Buoy"].values, binwaves_data.hs().values)
+    hs_colors = safe_gaussian_kde(
+        buoy_data["Hs_Buoy"].values, binwaves_data.hs().values
+    )
     axes2[0].scatter(
         buoy_data["Hs_Buoy"].values,
         binwaves_data.hs().values,
@@ -611,9 +745,11 @@ def plot_wave_series(
     axes2[0].set_ylabel("Hs - BinWaves [m]")
     axes2[0].set_xlim([0, 7])
     axes2[0].set_ylim([0, 7])
-    
+
     # Tp scatter plot
-    tp_colors = safe_gaussian_kde(buoy_data["Tp_Buoy"].values, binwaves_data.tp().values)
+    tp_colors = safe_gaussian_kde(
+        buoy_data["Tp_Buoy"].values, binwaves_data.tp().values
+    )
     axes2[1].scatter(
         buoy_data["Tp_Buoy"].values,
         binwaves_data.tp().values,
@@ -635,9 +771,11 @@ def plot_wave_series(
     axes2[1].set_ylabel("Tp - BinWaves [s]")
     axes2[1].set_xlim([0, 20])
     axes2[1].set_ylim([0, 20])
-    
+
     # Direction scatter plot
-    dpm_colors = safe_gaussian_kde(buoy_data["Dir_Buoy"].values, binwaves_data.dpm().values)
+    dpm_colors = safe_gaussian_kde(
+        buoy_data["Dir_Buoy"].values, binwaves_data.dpm().values
+    )
     axes2[2].scatter(
         buoy_data["Dir_Buoy"].values,
         binwaves_data.dpm().values,
@@ -661,7 +799,7 @@ def plot_wave_series(
     axes2[2].set_ylim([0, 360])
 
     # Set title for scatter plots
-    fig2.suptitle(f"{title_prefix} - Scatter Plots", fontsize=16, fontweight='bold')
+    fig2.suptitle(f"{title_prefix} - Scatter Plots", fontsize=16, fontweight="bold")
 
     # Format scatter plots
     for ax in axes2:
@@ -680,24 +818,38 @@ def plot_wave_series(
     # Save plots if requested
     if save_plots:
         import os
+
         # Create directory if it doesn't exist
         os.makedirs(save_path, exist_ok=True)
-        
+
         # Save time series plot
-        timeseries_filename = os.path.join(save_path, f"timeseries_{title_prefix}.{format}")
-        fig1.savefig(timeseries_filename, dpi=dpi, bbox_inches='tight')
+        timeseries_filename = os.path.join(
+            save_path, f"timeseries_{title_prefix}.{format}"
+        )
+        fig1.savefig(timeseries_filename, dpi=dpi, bbox_inches="tight")
         print(f"Time series plot saved as: {timeseries_filename}")
-        
+
         # Save scatter plot
         scatter_filename = os.path.join(save_path, f"scatter_{title_prefix}.{format}")
-        fig2.savefig(scatter_filename, dpi=dpi, bbox_inches='tight')
+        fig2.savefig(scatter_filename, dpi=dpi, bbox_inches="tight")
         print(f"Scatter plot saved as: {scatter_filename}")
 
     return fig1, axes1, fig2, axes2
 
-def create_white_zero_colormap(cmap_name="Spectral"):
+
+def create_white_zero_colormap(cmap_name: str = "Spectral") -> LinearSegmentedColormap:
     """
-    Create a colormap with white at zero, and selected colormap for positive values
+    Create a colormap with white at zero, and selected colormap for positive values.
+
+    Parameters
+    ----------
+    cmap_name : str, optional
+        Name of the base colormap to use, by default "Spectral"
+
+    Returns
+    -------
+    LinearSegmentedColormap
+        Custom colormap with white at zero
     """
 
     # Get the base colormap
@@ -718,7 +870,16 @@ def create_white_zero_colormap(cmap_name="Spectral"):
     return custom_cmap
 
 
-def create_custom_bathy_cmap():
+def create_custom_bathy_cmap() -> LinearSegmentedColormap:
+    """
+    Create a custom colormap for bathymetry visualization.
+
+    Returns
+    -------
+    LinearSegmentedColormap
+        Custom bathymetry colormap with blue to brown color scheme
+    """
+
     # Define your colors
     custom_colors = [
         "#4a84b5",
@@ -747,12 +908,38 @@ def plot_spectrum_in_coastline(
     reconstruction_kps: xr.Dataset,  # TODO: This is not used
     offshore_spectra: xr.Dataset,
     time_to_plot: str,
-    sites_for_spectrum: list,
-):
+    sites_for_spectrum: List[int],
+) -> Tuple[Figure, Axes]:
     """
     Plot gridded graph with wave spectra visualization.
     Handles both geographic (lat/lon) and Cartesian (UTM) coordinates.
+
+    Parameters
+    ----------
+    bathy : xr.DataArray
+        Bathymetry data
+    reconstructed_onshore_spectra : xr.Dataset
+        Reconstructed onshore wave spectra
+    reconstruction_kps : xr.Dataset
+        Reconstruction key points (currently unused)
+    offshore_spectra : xr.Dataset
+        Offshore wave spectra
+    time_to_plot : str
+        Time string to plot
+    sites_for_spectrum : List[int]
+        List of site indices for spectrum plotting
+
+    Returns
+    -------
+    Tuple[Figure, Axes]
+        Figure and axes objects
+
+    Raises
+    ------
+    Exception
+        If there's an error in plotting the spectrum
     """
+
     try:
         # Print shapes for debugging
 
@@ -876,6 +1063,7 @@ def plot_spectrum_in_coastline(
             ax.grid(True, linestyle="--", alpha=0.5)
 
         return fig, ax
+
     except Exception as e:
         print(f"Error in plot_spectrum_in_coastline: {str(e)}")
         raise
