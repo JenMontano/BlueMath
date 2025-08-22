@@ -10,28 +10,28 @@
 ! Core (mandatory) parameters; no defaults
 !+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 ! Pre-processing option. Useful for checking grid violations.
-  ipre = {{ipre}} !Pre-processor flag (1: on; 0: off)
+  ipre = 0 !Pre-processor flag (1: on; 0: off)
 
 ! Baroclinic/barotropic option. If ibc=0 (baroclinic model), ibtp is not used.
-  ibc = {{ibc}} !Baroclinic option
-  ibtp = {{ibtp}} 
+  ibc = 1 !Baroclinic option
+  ibtp = 0 
 
-  rnday = {{rnday}} !total run time in days 
-  dt = {{dt}} !Time step in sec
+  rnday = 8.99988425925926 !total run time in days 
+  dt = 5 !Time step in sec
 
 ! Grid for WWM (USE_WWM)
-  msc2 = {{msc2}}     !same as msc in .nml ... for consitency check between SCHISM and WWM
-  mdc2 = {{mdc2}}     !same as mdc in .nml
+  msc2 = 24     !same as msc in .nml ... for consitency check between SCHISM and WWM
+  mdc2 = 30     !same as mdc in .nml
 
 ! Define # of tracers in tracer modules (if enabled)
-  ntracer_gen = {{ntracer_gen}} !user defined module (USE_GEN)
-  ntracer_age = {{ntracer_age}} !age calculation (USE_AGE). Must be =2*N where N is # of age tracers
-  sed_class = {{sed_class}} !SED3D (USE_SED)
-  eco_class = {{eco_class}} !EcoSim (USE_ECO): must be between [25,60]
+  ntracer_gen = 2 !user defined module (USE_GEN)
+  ntracer_age = 4 !age calculation (USE_AGE). Must be =2*N where N is # of age tracers
+  sed_class = 5 !SED3D (USE_SED)
+  eco_class = 27 !EcoSim (USE_ECO): must be between [25,60]
 
 ! Global output controls
-  nspool = {{nspool}} !output step spool
-  ihfskip = {{ihfskip}} !stack spool; every ihfskip steps will be put into 1_*, 2_*, etc...
+  nspool = 360 !output step spool
+  ihfskip = 518400 !stack spool; every ihfskip steps will be put into 1_*, 2_*, etc...
 /
 
 &OPT
@@ -39,17 +39,17 @@
 ! Optional parameters 
 !+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 ! Starting time
-  start_year = {{start_year}} !int
-  start_month = {{start_month}} !int
-  start_day = {{start_day}} !int
-  start_hour = {{start_hour}} !double
-  utc_start = {{utc_start}} !double
+  start_year = 2000 !int
+  start_month = 2 !int
+  start_day = 1 !int
+  start_hour = 0 !double
+  utc_start = 8 !double
 
 !-----------------------------------------------------------------------
 ! Coordinate option: 1: Cartesian; 2: lon/lat (hgrid.gr3=hgrid.ll in this case,
 ! and orientation of element is outward of earth)
 !-----------------------------------------------------------------------
-  ics = {{ics}} !Coordinate option
+  ics = 2 !Coordinate option
 
 !-----------------------------------------------------------------------
 ! Hotstart option. 0: cold start; 1: hotstart with time reset to 0; 2: 
@@ -62,10 +62,10 @@
 ! ieos_type=0: UNESCO 1980 (nonlinear); =1: linear function of T ONLY, i.e. 
 ! \rho=eos_b+eos_a*T, where eos_a<=0 in kg/m^3/C
 !-----------------------------------------------------------------------
-  ieos_type = {{ieos_type}}
-  ieos_pres = {{ieos_pres}} !used only if ieos_type=0. 0: without pressure effects 
-  eos_a = {{eos_a}} !needed if ieos_type=1; should be <=0 
-  eos_b = {{eos_b}} !needed if ieos_type=1
+  ieos_type = 0
+  ieos_pres = 0 !used only if ieos_type=0. 0: without pressure effects 
+  eos_a = -0.1 !needed if ieos_type=1; should be <=0 
+  eos_b = 1001 !needed if ieos_type=1
 
 !-----------------------------------------------------------------------
 ! Main ramp option
@@ -86,7 +86,7 @@
 ! If indvel=0, conformal linear shape function is used; if indvel=1, averaging method is used.
 ! For indvel=0, a stabilization method is needed (see below). 
 !-----------------------------------------------------------------------
-  indvel = {{indvel}}
+  indvel = 1
  
 !-----------------------------------------------------------------------
 ! 2 stabilization methods, mostly for indvel=0.
@@ -103,7 +103,7 @@
 ! (2) indvel=0, ishapiro=1 (shapiro0=0.5), ihorcon=inter_mom=0.
 ! For applications that include eddying regime, refer to the manual.
 !-----------------------------------------------------------------------
-  ihorcon = {{ihorcon}}
+  ihorcon = 0
   hvis_coef0 = 0.025 !const. diffusion # if ihorcon/=0; <=0.025 for ihorcon=2, <=0.125 for ihorcon=1
 !  cdh = 0.01 !needed only if ihorcon/=0; land friction coefficient - not active yet
 
@@ -112,7 +112,7 @@
 ! if indvel=ihorcon=0. To transition between eddying/non-eddying regimes, use
 ! indvel=0, ihorcon/=0, and ishapiro=-1 (shapiro.gr3).
 !-----------------------------------------------------------------------
-  ishapiro = {{ishapiro}} !on/off flag
+  ishapiro = 0 !on/off flag
   shapiro0 = 0.5 !Shapiro filter strength, needed only if ishapiro=1; max is 0.5 
   niter_shap = 1 !needed of ishapiro/=0 - # of iterations with Shapiro filter. Suggested: 1
 
@@ -337,7 +337,7 @@
 ! if inter_mom=-1, the regions where Kriging is used is specified in krvel.gr3 
 ! (depth=0: no kriging; depth=1: with kriging). 
 !-----------------------------------------------------------------------
-  inter_mom = {{inter_mom}}
+  inter_mom = 0
   kr_co = 1 !not used if inter_mom=0
 
 !-----------------------------------------------------------------------
@@ -373,7 +373,7 @@
 ! If WWM is enabled and icou_elfe_wwm>0 and iwind_form=-2, stress is overwritten by WWM.
 ! In all cases, if USE_ICE the stress in ice-covered portion is calculated by ICE routine.
 !-----------------------------------------------------------------------
-  nws = {{nws}}  
+  nws = 1  
 
 !-----------------------------------------------------------------------
 ! Heat and salt exchange. isconsv=1 needs ihconsv=1; ihconsv=1 needs nws=2.
@@ -550,7 +550,7 @@
 !-----------------------------------------------------------------------
 ! Global output options
 !-----------------------------------------------------------------------
-  iof_hydro(1) = {{output_WL}} !0: off; 1: on - elev. [m]
+  iof_hydro(1) = 1 !0: off; 1: on - elev. [m]
   iof_hydro(2) = 0 !air pressure [Pa]
   iof_hydro(3) = 0 !air temperature [C]
   iof_hydro(4) = 0 !Specific humidity [-]
@@ -563,12 +563,12 @@
   iof_hydro(11) = 0 !evaporation rate [kg/m/m/s]
   iof_hydro(12) = 0 !precipitation rate [kg/m/m/s]
   iof_hydro(13) = 0 !Bottom drag coefficient [-]
-  iof_hydro(14) = {{output_wind_velocity}} !wind velocity vector [m/s]
+  iof_hydro(14) = 1 !wind velocity vector [m/s]
   iof_hydro(15) = 0 !wind stress vector [m^2/s/s]
-  iof_hydro(16) = {{output_depth_averaged_vel}} !depth-averaged vel vector [m/s]
+  iof_hydro(16) = 1 !depth-averaged vel vector [m/s]
   iof_hydro(17) = 0 !vertical velocity [m/s]
-  iof_hydro(18) = {{output_water_temperature}} !water temperature [C]
-  iof_hydro(19) = {{output_water_salinity}} !water salinity [PSU]
+  iof_hydro(18) = 0 !water temperature [C]
+  iof_hydro(19) = 0 !water salinity [PSU]
   iof_hydro(20) = 0 !water density [kg/m^3]
   iof_hydro(21) = 0 !eddy diffusivity [m^2/s]
   iof_hydro(22) = 0 !eddy viscosity [m^2/s]
@@ -583,4 +583,3 @@
   iof_hydro(31) = 0 !Barotropic pressure gradient force vector (m.s-2) @side centers 
 
 /
-
