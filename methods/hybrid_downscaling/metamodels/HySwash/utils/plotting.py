@@ -90,7 +90,6 @@ def show_graph_for_different_parameters(pca: PCA, rbf: RBF, lhs_parameters,depth
 
         # Spatial Reconstruction
         predicted_hs = rbf.predict(dataset=df_dataset_single_case)
-
         predicted_hs_ds = xr.Dataset(
             {
                 "PCs": (["case_num", "n_component"], predicted_hs.values),
@@ -100,8 +99,6 @@ def show_graph_for_different_parameters(pca: PCA, rbf: RBF, lhs_parameters,depth
                 "n_component": np.arange(len(pca.pcs_df.columns)),
             },
         )
-
-        # Get reconstructed Hs
         ds_output_all = pca.inverse_transform(PCs=predicted_hs_ds)
 
         # Plotting
@@ -110,27 +107,16 @@ def show_graph_for_different_parameters(pca: PCA, rbf: RBF, lhs_parameters,depth
         ds_output_all["Hs"].sel(case_num=0).plot(x="Xp", ax=ax, color="k")
         depth= np.loadtxt(depthfile)
 
-        min_Nv = 0
-        max_Nv = 1000
-        norm = mcolors.Normalize(vmin=min_Nv, vmax=max_Nv)
-        cmap = cm.get_cmap('Greens')
-
-        color = cmap(norm(Nv))
+        # Improved vegetation visualization using fill_between
+        veg_start = 400 - int(Wv)
+        veg_end = 400
         
-        ax.plot(
-            np.arange(400-int(Wv),400), -depth[400-int(Wv):400],
-            color = color,
-            zorder = 3,
-            linewidth=8*hv
-        )
-        # sm.plot_depthfile(ax=ax)
-        # ax.plot(
-        #     np.arange(int(pp.swash_proj.np_ini), int(pp.swash_proj.np_fin)),
-        #     np.repeat(-2.5, int(pp.swash_proj.np_fin - pp.swash_proj.np_ini)),
-        #     color="darkgreen",
-        #     linewidth=int(25 * vegetation),
-        # )
-        #ax.set_ylim(-1, 3)
+        n_stems = int(Nv/10)  # Number of stems based on density
+        stem_positions = np.linspace(veg_start, veg_end-1, n_stems).astype(int)
+        for x in stem_positions:
+            y_base = -depth[x]
+            ax.plot([x, x], [y_base, y_base + hv], color='green', linewidth=2, alpha=0.8, zorder=4)
+
         ax.set_ylim(-12,6)
         ax.set_xlim(0, 600)
         ax.grid(True)
@@ -161,6 +147,7 @@ def show_graph_for_different_parameters(pca: PCA, rbf: RBF, lhs_parameters,depth
             max=max,
             step=step,
             description=param,
+            continuous_update=False
         )
         i=i+1
 
