@@ -10,7 +10,7 @@ def load_atmospheric_predictor(
     variables: List[str], region: Tuple[float], estela: bool = False
 ) -> xr.Dataset:
     """
-    Load atmospheric predictor data for the given region using Geoocean's THREDDS server.
+    Load atmospheric predictor data for the given region using GeoOcean's THREDDS server.
 
     Parameters
     ----------
