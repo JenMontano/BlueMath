@@ -37,10 +37,10 @@ Since the workshop in 2020, more universities has been interested in collaborati
 
 | Name                | Tested Image Version | Tested Commit                            | Path to Example                                        | Cloud |
 | ------------------- | -------------------- | ---------------------------------------- | ------------------------------------------------------ | ----- |
-| BinWaves_Cantabria  | geoocean/rocky8:1.9  | 26abc2e7aa3dac6b4b6877e580f2006d892939ad | climate_services/hindcast/BinWaves_Cantabria           | ✅    |
+| BinWaves_Duke  | geoocean/rocky8:1.12  | 463e210901c0ec09e4b2ab79756045d5e7784f1b | climate_services/hindcast/BinWaves_Duke           | ✅    |
 | GreenSurge_Tonga    | geoocean/rocky8:1.9  | 0805fa6944049ada65e257d54ee4ae96ad0b5b30 | climate_services/hindcast/GreenSurge_Tonga             | ❌    |
-| MUSCLE_Aveiro       | geoocean/rocky8:1.9  | 26e1d7f79442dc13d53004fd8619df172308656f | climate_services/probabilistic/MUSCLE_Aveiro           | ✅    |
-| HySwash/Veggy       | geoocean/rocky8:1.9  | 56413fb96147bab9d495af793ccd29cc88fea44f | methods/hybrid_downscaling/metamodels/HySwash/Veggy    | ✅    |
+| MUSCLE_Aveiro       | geoocean/rocky8:1.12  | 6eb0f1fc47d9040ca545df41b1013d8b2565b848 | climate_services/probabilistic/MUSCLE_Aveiro           | ✅    |
+| HySwash/Veggy       | geoocean/rocky8:1.12  | 38c84616c02b0daff76e943941c8f11cae2e3d1f | methods/hybrid_downscaling/metamodels/HySwash/Veggy    | ✅    |
 | HySwash/CHySwash    | geoocean/rocky8:1.9  | 56413fb96147bab9d495af793ccd29cc88fea44f | methods/hybrid_downscaling/metamodels/HySwash/CHySwash | ❌    |
 | GreenSurge_Singapur | geoocean/rocky8:1.9  | 0805fa6944049ada65e257d54ee4ae96ad0b5b30 | methods/hybrid_downscaling/additive/GreenSurge         | ❌    |
 | SHyTCWaves          | geoocean/rocky8:1.9  | 56413fb96147bab9d495af793ccd29cc88fea44f | methods/hybrid_downscaling/metamodels/SHyTCWaves       | ❌    |
